@@ -261,3 +261,7 @@ el código con el PDF, `preview.rs` rasteriza y dibuja el PDF, `spell.rs` revisa
 la ortografía, `workspace.rs` lleva la sesión y los archivos, `backdrop.rs` trama la foto, `theme.rs` define
 los temas, `custom.rs` aplica la personalización y `config.rs` guarda
 preferencias. `snippets.json` conserva los catálogos de la versión Python.
+
+## Licencia
+
+[MIT](LICENSE).

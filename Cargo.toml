@@ -3,6 +3,7 @@ name = "miyulatex"
 version = "0.2.0"
 edition = "2024"
 description = "Editor de LaTeX, Markdown y código con visor de PDF e imágenes"
+license = "MIT"
 
 [[bin]]
 name = "miyu"
