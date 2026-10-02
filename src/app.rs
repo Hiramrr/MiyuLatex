@@ -3957,6 +3957,7 @@ mod tests {
             }
             assert_eq!(app.preview.rendered(), 1);
         }
+        tick(&mut app, &ctx, vec![]);
         let galley = app.documents[0].layout.galley.clone().unwrap();
         assert_eq!(galley.text(), app.editor().source());
         app.finish_close(Pending::Close(0), &ctx);
