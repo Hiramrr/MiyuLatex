@@ -87,7 +87,7 @@ pub struct App {
     history_file: Option<PathBuf>,
     history_versions: Vec<PathBuf>,
     history_index: usize,
-    history_text: String,
+    history_text: Option<String>,
     table: bool,
     table_rows: usize,
     table_columns: usize,
@@ -109,6 +109,7 @@ pub struct App {
     panel: bool,
     log: bool,
     settings: bool,
+    project_options: bool,
     templates: bool,
     symbols: bool,
     symbol_query: String,
@@ -127,6 +128,7 @@ pub struct App {
     edited_at: Option<Instant>,
     workspace: workspace::State,
     spell: crate::spell::Speller,
+    mascot: crate::mascot::Mascot,
 }
 
 pub fn project_files(root: &Path) -> Vec<PathBuf> {
@@ -235,7 +237,7 @@ impl App {
             history_file: None,
             history_versions: Vec::new(),
             history_index: 0,
-            history_text: String::new(),
+            history_text: None,
             table: false,
             table_rows: 3,
             table_columns: 3,
@@ -255,6 +257,7 @@ impl App {
             panel: false,
             log: false,
             settings: false,
+            project_options: false,
             templates: false,
             symbols: false,
             symbol_query: String::new(),
@@ -273,6 +276,7 @@ impl App {
             edited_at: None,
             workspace: workspace::State::default(),
             spell: crate::spell::Speller::default(),
+            mascot: Default::default(),
         };
         if session && app.restore_session() {
             // Las pestañas de la última vez ya están abiertas.
@@ -450,17 +454,17 @@ impl App {
             format!("(?i){}", regex::escape(&self.project_query))
         };
         let re = regex::Regex::new(&pattern).unwrap();
-        let overlays = self.source_overlays();
         for path in &self.files {
             if !Format::detect(path).editable()
                 || fs::metadata(path).is_ok_and(|m| m.len() > 2 * 1024 * 1024)
             {
                 continue;
             }
-            let text = overlays
+            let text = self
+                .documents
                 .iter()
-                .find(|s| s.path == *path)
-                .map(|s| s.text.clone())
+                .find(|d| d.editor.path.as_ref() == Some(path))
+                .map(|d| d.editor.text())
                 .or_else(|| fs::read_to_string(path).ok())
                 .unwrap_or_default();
             for (row, line) in text.lines().enumerate() {
@@ -486,11 +490,14 @@ impl App {
         };
         self.history_versions = latex::versions(&path);
         self.history_index = 0;
-        self.history_text = self
-            .history_versions
-            .first()
-            .and_then(|p| fs::read_to_string(p).ok())
-            .unwrap_or_default();
+        self.history_text = match self.history_versions.first().map(fs::read_to_string) {
+            Some(Ok(text)) => Some(text),
+            Some(Err(e)) => {
+                self.message = format!("No pude leer la versión: {e}");
+                None
+            }
+            None => None,
+        };
         self.history_file = Some(path);
         self.history = true;
     }
@@ -594,7 +601,7 @@ impl App {
         });
     }
     fn export_pdf(&mut self) {
-        let Some(path) = self.pdf().path.clone() else {
+        let Some(path) = self.pdf_path().map(Path::to_path_buf) else {
             self.message = "Compila el documento para exportar el PDF".into();
             return;
         };
@@ -1167,12 +1174,17 @@ impl App {
         style.visuals.popup_shadow = egui::epaint::Shadow::NONE;
         let text_size = self.config.ui_font_size as f32;
         for font in style.text_styles.values_mut() {
-            *font = FontId::monospace(text_size);
+            *font = FontId::proportional(text_size);
         }
+        style.text_styles.insert(
+            egui::TextStyle::Heading,
+            FontId::proportional(text_size + 3.0),
+        );
         style
             .text_styles
-            .insert(egui::TextStyle::Heading, FontId::monospace(text_size + 3.0));
-        style.spacing.button_padding = egui::vec2(8.0, 4.0);
+            .insert(egui::TextStyle::Monospace, FontId::monospace(text_size));
+        style.spacing.button_padding = egui::vec2(10.0, 6.0);
+        style.spacing.interact_size.y = 30.0;
         style.spacing.item_spacing = egui::vec2(6.0, 6.0);
         let radius = egui::CornerRadius::same(self.config.corner_radius.round() as u8);
         style.visuals.window_corner_radius = radius;
@@ -1301,21 +1313,15 @@ impl App {
         if Self::shortcut(ctx, cmd, Key::R) || Self::shortcut(ctx, Modifiers::NONE, Key::F5) {
             self.compile(false, ctx);
         }
-        if Self::shortcut(ctx, cmd, Key::F) && self.editor().format.editable() {
-            let selected = self.editor().selected();
-            if !selected.is_empty() && !selected.contains('\n') {
-                self.query = selected;
-            }
-            self.find = true;
-            self.focus_find = true;
-            self.editor_mut().completions.clear();
+        if Self::shortcut(ctx, cmd, Key::F) {
+            self.start_find();
         }
         if Self::shortcut(ctx, Modifiers::CTRL, Key::Space) && self.config.completions {
+            self.editor_mut().request_completion();
             self.update_completion();
         }
-        if Self::shortcut(ctx, cmd, Key::G) && self.editor().format.editable() {
-            self.goto = true;
-            self.line = self.editor().cursor.row + 1;
+        if Self::shortcut(ctx, cmd, Key::G) {
+            self.start_goto();
         }
         if Self::shortcut(ctx, cmd, Key::P) || Self::shortcut(ctx, cmd, Key::Comma) {
             self.settings = true;
@@ -1345,7 +1351,7 @@ impl App {
         }
     }
     fn open_pdf(&mut self) {
-        if let Some(path) = &self.pdf().path {
+        if let Some(path) = self.pdf_path() {
             #[cfg(target_os = "macos")]
             let program = "open";
             #[cfg(target_os = "windows")]
@@ -1357,12 +1363,15 @@ impl App {
             }
         }
     }
-    fn clean_aux(&mut self) {
-        if self.editor().format != Format::Latex {
-            return;
+    fn clean_aux(&mut self) -> bool {
+        if self.compile_rx.is_some() {
+            self.message = "Detén la compilación antes de limpiar los archivos auxiliares".into();
+            return false;
         }
         let Some(root) = self.root() else {
-            return;
+            self.message =
+                "Abre un archivo LaTeX guardado para limpiar sus archivos auxiliares".into();
+            return false;
         };
         let mut count = 0;
         for extension in compiler::AUX {
@@ -1370,420 +1379,348 @@ impl App {
             if path.is_file() {
                 if let Err(e) = fs::remove_file(&path) {
                     self.message = format!("No pude eliminar {}: {e}", path.display());
-                    return;
+                    return false;
                 }
                 count += 1;
             }
         }
         self.message = format!("Eliminados {count} archivos auxiliares");
+        true
+    }
+    fn start_find(&mut self) {
+        if !self.editor().format.editable() {
+            return;
+        }
+        let selected = self.editor().selected();
+        if !selected.is_empty() && !selected.contains('\n') {
+            self.query = selected;
+        }
+        self.find = true;
+        self.focus_find = true;
+        self.editor_mut().completions.clear();
+    }
+    fn start_goto(&mut self) {
+        if !self.editor().format.editable() {
+            return;
+        }
+        self.goto = true;
+        self.line = self.editor().cursor.row + 1;
     }
     fn toolbar(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
-        egui::Panel::top("toolbar")
-            .default_size(68.0)
-            .min_size(68.0)
-            .show(ui, |ui| {
-                egui::MenuBar::new().ui(ui, |ui| {
-                    ui.menu_button("Archivo", |ui| {
-                        if ui.button("Nuevo proyecto…").clicked() {
-                            self.new_project();
-                            ui.close();
-                        }
-                        if ui.button("Nuevo documento…").clicked() {
-                            self.templates = true;
-                            ui.close();
-                        }
-                        if ui.button("Abrir archivo…").clicked() {
-                            self.open_dialog();
-                            ui.close();
-                        }
-                        if ui.button("Abrir carpeta…").clicked() {
-                            self.folder_dialog();
-                            ui.close();
-                        }
-                        self.recent_menu(ui);
-                        if ui.button("Abrir rápido…").clicked() {
-                            self.open_quick();
-                            ui.close();
-                        }
-                        if ui.button("Nuevo archivo del proyecto…").clicked() {
-                            self.new_file();
-                            ui.close();
-                        }
-                        if ui.button("Añadir archivos al proyecto…").clicked() {
-                            self.add_files();
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(
-                                self.tool_rx.is_none(),
-                                egui::Button::new("Importar proyecto ZIP…"),
-                            )
-                            .clicked()
-                        {
-                            self.import_project(&ctx);
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(
-                                self.tool_rx.is_none(),
-                                egui::Button::new("Exportar proyecto ZIP…"),
-                            )
-                            .clicked()
-                        {
-                            self.export_project(&ctx);
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(
-                                self.pdf().path.is_some(),
-                                egui::Button::new("Exportar PDF…"),
-                            )
-                            .clicked()
-                        {
-                            self.export_pdf();
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(
-                                self.editor().format.editable(),
-                                egui::Button::new("Guardar"),
-                            )
-                            .clicked()
-                        {
-                            self.save_document(self.active, false);
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(
-                                self.editor().format.editable(),
-                                egui::Button::new("Guardar como…"),
-                            )
-                            .clicked()
-                        {
-                            self.save_document(self.active, true);
-                            ui.close();
-                        }
-                        if ui.button("Cerrar documento").clicked() {
-                            self.request_close(Pending::Close(self.active), &ctx);
-                            ui.close();
-                        }
-                        if ui.button("Guardar todos").clicked() {
-                            self.save_all();
-                            ui.close();
-                        }
-                        ui.separator();
-                        if ui.button("Salir").clicked() {
-                            self.request_close(Pending::Quit, &ctx);
-                            ui.close();
-                        }
-                    });
-                    ui.menu_button("Editar", |ui| {
-                        if !self.editor().format.editable() {
-                            ui.disable();
-                        }
-                        if ui.button("Deshacer").clicked() {
-                            self.editor_mut().undo(false);
-                            self.changed_editor();
-                            ui.close();
-                        }
-                        if ui.button("Rehacer").clicked() {
-                            self.editor_mut().undo(true);
-                            self.changed_editor();
-                            ui.close();
-                        }
-                        ui.separator();
-                        if ui.button("Buscar y reemplazar…").clicked() {
-                            self.find = true;
-                            self.focus_find = true;
-                            ui.close();
-                        }
-                        if ui.button("Ir a línea…").clicked() {
-                            self.goto = true;
-                            ui.close();
-                        }
-                        if ui.button("Buscar en el proyecto…").clicked() {
-                            self.project_search = true;
-                            self.search_project();
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(
-                                self.editor().format.comment().is_some(),
-                                egui::Button::new("Comentar líneas"),
-                            )
-                            .clicked()
-                        {
-                            self.editor_mut().rewrite_lines(true, false);
-                            self.changed_editor();
-                            ui.close();
-                        }
-                    });
-                    ui.menu_button("Ver", |ui| {
-                        let mut changed = ui
-                            .checkbox(&mut self.config.show_sidebar, "Archivos y esquema")
-                            .changed();
-                        changed |= ui
-                            .checkbox(&mut self.config.show_preview, "Vista previa")
-                            .changed();
-                        changed |= ui
-                            .checkbox(&mut self.config.soft_wrap, "Ajustar líneas")
-                            .changed();
-                        ui.checkbox(&mut self.panel, "Problemas y registro");
-                        if changed {
-                            self.preferences_changed(&ctx);
-                        }
-                    });
-                    ui.menu_button("Insertar", |ui| {
-                        if !matches!(self.editor().format, Format::Latex | Format::Markdown) {
-                            ui.disable();
-                        }
-                        if ui
-                            .add_enabled(
-                                self.editor().format == Format::Latex,
-                                egui::Button::new("Símbolo LaTeX…"),
-                            )
-                            .clicked()
-                        {
-                            self.symbols = true;
-                            ui.close();
-                        }
-                        if ui.button("Negrita").clicked() {
-                            self.editor_mut().emphasize(true);
-                            self.changed_editor();
-                            ui.close();
-                        }
-                        if ui.button("Cursiva").clicked() {
-                            self.editor_mut().emphasize(false);
-                            self.changed_editor();
-                            ui.close();
-                        }
-                        if self.editor().format == Format::Latex {
-                            ui.separator();
-                            if ui.button("Tabla…").clicked() {
-                                self.table = true;
-                                ui.close();
-                            }
-                            if ui.button("Figura…").clicked() {
-                                self.insert_figure();
-                                ui.close();
-                            }
-                            if ui.button("Cita o referencia…").clicked() {
-                                self.references = true;
-                                self.outline = false;
-                                self.config.show_sidebar = true;
-                                ui.close();
-                            }
-                            for (label, before, after) in [
-                                ("Matemática en línea", "\\(", "\\)"),
-                                ("Ecuación centrada", "\\[\n", "\n\\]"),
-                                ("Sección", "\\section{", "}"),
-                                ("Subsección", "\\subsection{", "}"),
-                                ("Subrayado", "\\underline{", "}"),
-                            ] {
-                                if ui.button(label).clicked() {
-                                    self.editor_mut().wrap(before, after);
-                                    self.changed_editor();
-                                    ui.close();
-                                }
-                            }
-                            ui.menu_button("Entorno", |ui| {
-                                ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-                                    for (name, body) in &catalog().environments {
-                                        if ui.button(name).clicked() {
-                                            let args = catalog()
-                                                .env_args
-                                                .get(name)
-                                                .map_or("", String::as_str);
-                                            self.insert_snippet(&format!(
-                                                "\\begin{{{name}}}{args}\n    {}\n\\end{{{name}}}",
-                                                body.replace('\n', "\n    ")
-                                            ));
-                                            ui.close();
-                                        }
-                                    }
-                                });
-                            });
-                        }
-                    });
-                    ui.menu_button("LaTeX", |ui| {
-                        if self.root().is_none() && self.editor().format != Format::Latex {
-                            ui.disable();
-                        }
-                        if ui
-                            .add_enabled(self.compile_rx.is_none(), egui::Button::new("Compilar"))
-                            .clicked()
-                        {
-                            self.compile(false, &ctx);
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(
-                                self.compile_rx.is_some(),
-                                egui::Button::new("Detener compilación"),
-                            )
-                            .clicked()
-                        {
-                            self.cancel.store(true, Ordering::Relaxed);
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(
-                                self.compile_rx.is_none(),
-                                egui::Button::new("Recompilar desde cero"),
-                            )
-                            .clicked()
-                        {
-                            self.clean_aux();
-                            self.compile(false, &ctx);
-                            ui.close();
-                        }
-                        if ui.button("Archivo principal y motor…").clicked() {
-                            self.settings = true;
-                            ui.close();
-                        }
-                        if ui
-                            .checkbox(
-                                &mut self.config.autocompile,
-                                "Compilar al dejar de escribir",
-                            )
-                            .changed()
-                        {
-                            self.preferences_changed(&ctx);
-                        }
-                        if ui
-                            .checkbox(&mut self.config.autosave, "Guardar automáticamente")
-                            .changed()
-                        {
-                            self.preferences_changed(&ctx);
-                        }
-                        ui.separator();
-                        if ui.button("Historial del archivo…").clicked() {
-                            self.show_history();
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(
-                                self.tool_rx.is_none(),
-                                egui::Button::new("Contar palabras…"),
-                            )
-                            .clicked()
-                        {
-                            self.count_words(&ctx);
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(
-                                self.tool_rx.is_none(),
-                                egui::Button::new("Mostrar esta línea en el PDF"),
-                            )
-                            .clicked()
-                        {
-                            self.sync_to_pdf(&ctx);
-                            ui.close();
-                        }
-                    });
-                    if ui.button("Preferencias").clicked() {
-                        self.settings = true;
-                    }
-                    if ui.button("Ayuda").clicked() {
-                        self.help = true;
-                    }
-                });
-                ui.separator();
+        let editable = self.editor().format.editable();
+        let latex = self.editor().format == Format::Latex;
+        let saved_source = self.root().is_some();
+        let compiling = self.compile_rx.is_some();
+        let tool_ready = self.tool_rx.is_none();
+        let has_pdf = self.pdf_path().is_some();
+        egui::Panel::top("toolbar").show(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    if ui.button("Nuevo proyecto").clicked() {
-                        self.new_project();
-                    }
-                    if ui.button("Nuevo").clicked() {
+                ui.menu_button("Archivo", |ui| {
+                    if action(ui, "Nuevo documento…", true, "Abre un documento sin guardar. Cmd/Ctrl+N.").clicked() {
                         self.templates = true;
+                        ui.close();
                     }
-                    if ui.button("Abrir").clicked() {
+                    if action(ui, "Abrir archivo…", true, "Abre texto, código, un PDF o una imagen. Cmd/Ctrl+O.").clicked() {
                         self.open_dialog();
+                        ui.close();
                     }
-                    if ui
-                        .add_enabled(
-                            self.editor().format.editable(),
-                            egui::Button::new("Guardar"),
-                        )
-                        .clicked()
-                    {
-                        self.save_document(self.active, false);
+                    if action(ui, "Abrir archivo del proyecto…", !self.files.is_empty(), "Busca por nombre en los archivos del proyecto. Cmd/Ctrl+Mayús+O. Requiere archivos en el proyecto.").clicked() {
+                        self.open_quick();
+                        ui.close();
                     }
                     ui.separator();
-                    if ui
-                        .add_enabled(
-                            self.compile_rx.is_none()
-                                && (self.editor().format == Format::Latex || self.root().is_some()),
-                            egui::Button::new(
-                                RichText::new("Compilar").color(col(self.theme.primary)),
-                            ),
-                        )
-                        .clicked()
-                    {
-                        self.compile(false, &ctx);
+                    if action(ui, "Guardar", editable, "Guarda el documento activo. Cmd/Ctrl+S. PDF e imágenes son de solo lectura.").clicked() {
+                        self.save_document(self.active, false);
+                        ui.close();
                     }
-                    if self.compile_rx.is_some() {
-                        ui.spinner();
-                        if ui.button("Cancelar").clicked() {
-                            self.cancel.store(true, Ordering::Relaxed);
+                    if action(ui, "Guardar como…", editable, "Guarda el documento activo con otro nombre o ubicación. Cmd/Ctrl+Mayús+S. Requiere un documento editable.").clicked() {
+                        self.save_document(self.active, true);
+                        ui.close();
+                    }
+                    let unsaved = self.documents.iter().any(|d| d.editor.format.editable() && (d.editor.dirty() || d.editor.path.is_none()));
+                    if action(ui, "Guardar todos", unsaved, "Guarda los documentos abiertos que tienen cambios o aún no tienen nombre.").clicked() {
+                        self.save_all();
+                        ui.close();
+                    }
+                    if action(ui, "Historial del archivo LaTeX…", saved_source, "Consulta y restaura versiones guardadas del archivo LaTeX activo. Requiere guardarlo primero.").clicked() {
+                        self.show_history();
+                        ui.close();
+                    }
+                    if action(ui, "Cerrar documento", true, "Cierra la pestaña activa y pregunta si tiene cambios sin guardar. Cmd/Ctrl+W.").clicked() {
+                        self.request_close(Pending::Close(self.active), &ctx);
+                        ui.close();
+                    }
+                    ui.separator();
+                    if action(ui, "Nuevo proyecto…", true, "Crea una carpeta de proyecto vacía, con código o con una plantilla. Cmd/Ctrl+Mayús+N.").clicked() {
+                        self.new_project();
+                        ui.close();
+                    }
+                    if action(ui, "Abrir carpeta de proyecto…", true, "Elige una carpeta existente y muestra sus archivos.").clicked() {
+                        self.folder_dialog();
+                        ui.close();
+                    }
+                    self.recent_menu(ui);
+                    if action(ui, "Crear archivo en el proyecto…", true, "Crea y abre un archivo dentro de la carpeta del proyecto.").clicked() {
+                        self.new_file();
+                        ui.close();
+                    }
+                    if action(ui, "Añadir archivos al proyecto…", true, "Copia archivos existentes al proyecto sin sobrescribir archivos con el mismo nombre.").clicked() {
+                        self.add_files();
+                        ui.close();
+                    }
+                    ui.separator();
+                    if action(ui, "Importar proyecto ZIP…", tool_ready, "Extrae un ZIP en una carpeta nueva y abre el proyecto. Espera si hay otra operación en curso.").clicked() {
+                        self.import_project(&ctx);
+                        ui.close();
+                    }
+                    if action(ui, "Exportar proyecto ZIP…", tool_ready, "Guarda los cambios y copia el proyecto a un ZIP. Espera si hay otra operación en curso.").clicked() {
+                        self.export_project(&ctx);
+                        ui.close();
+                    }
+                    if action(ui, "Exportar PDF…", has_pdf, "Guarda una copia del PDF del documento activo. Abre un PDF o compila un documento LaTeX primero.").clicked() {
+                        self.export_pdf();
+                        ui.close();
+                    }
+                    ui.separator();
+                    if action(ui, "Salir", true, "Cierra la aplicación y pregunta si hay cambios sin guardar. Cmd/Ctrl+Q.").clicked() {
+                        self.request_close(Pending::Quit, &ctx);
+                        ui.close();
+                    }
+                });
+                ui.menu_button("Editar", |ui| {
+                    if action(ui, "Deshacer", editable && self.editor().can_undo(), "Deshace el último cambio del documento. Cmd/Ctrl+Z. Requiere un cambio que deshacer.").clicked() {
+                        self.editor_mut().undo(false);
+                        self.changed_editor();
+                        ui.close();
+                    }
+                    if action(ui, "Rehacer", editable && self.editor().can_redo(), "Recupera el último cambio deshecho. Cmd/Ctrl+Mayús+Z. Requiere un cambio que rehacer.").clicked() {
+                        self.editor_mut().undo(true);
+                        self.changed_editor();
+                        ui.close();
+                    }
+                    ui.separator();
+                    if action(ui, "Buscar y reemplazar…", editable, "Busca texto en el documento activo. Cmd/Ctrl+F. Requiere un documento editable.").clicked() {
+                        self.start_find();
+                        ui.close();
+                    }
+                    if action(ui, "Ir a línea…", editable, "Lleva el cursor al número de línea que elijas. Cmd/Ctrl+G. Requiere un documento editable.").clicked() {
+                        self.start_goto();
+                        ui.close();
+                    }
+                    if action(ui, "Buscar en el proyecto…", !self.files.is_empty(), "Busca texto en los archivos del proyecto, incluidos los cambios abiertos sin guardar. Cmd/Ctrl+Mayús+F.").clicked() {
+                        self.project_search = true;
+                        self.search_project();
+                        ui.close();
+                    }
+                    ui.separator();
+                    if action(ui, "Comentar o descomentar líneas", editable && self.editor().format.comment().is_some(), "Alterna los comentarios de las líneas seleccionadas según el lenguaje. Cmd/Ctrl+/. Requiere un lenguaje con comentarios.").clicked() {
+                        self.editor_mut().rewrite_lines(true, false);
+                        self.changed_editor();
+                        ui.close();
+                    }
+                });
+                ui.menu_button("Ver", |ui| {
+                    let mut changed = ui.checkbox(&mut self.config.show_sidebar, "Panel de archivos, esquema y referencias").on_hover_text("Muestra u oculta el panel lateral. F2.").changed();
+                    changed |= ui.checkbox(&mut self.config.show_preview, "Vista previa").on_hover_text("Muestra el PDF de LaTeX o la vista previa de Markdown. F3.").changed();
+                    changed |= ui.checkbox(&mut self.config.soft_wrap, "Ajustar líneas al ancho del editor").changed();
+                    ui.checkbox(&mut self.panel, "Problemas y registro de compilación").on_hover_text("Muestra u oculta los resultados de la última compilación. F4.");
+                    changed |= ui.checkbox(&mut self.config.mascot, "Gatito en la barra de estado").on_hover_text("Muestra u oculta la mascota. Se duerme si no escribes y salta cuando la compilación sale bien.").changed();
+                    ui.separator();
+                    ui.menu_button("Posición del panel de archivos", |ui| {
+                        changed |= ui.radio_value(&mut self.config.sidebar_right, false, "Izquierda").changed();
+                        changed |= ui.radio_value(&mut self.config.sidebar_right, true, "Derecha").changed();
+                    });
+                    ui.menu_button("Posición de la vista previa", |ui| {
+                        changed |= ui.radio_value(&mut self.config.preview_left, true, "Izquierda").changed();
+                        changed |= ui.radio_value(&mut self.config.preview_left, false, "Derecha").changed();
+                    });
+                    if changed { self.preferences_changed(&ctx); }
+                });
+                ui.menu_button("Insertar", |ui| {
+                    let prose = latex || self.editor().format == Format::Markdown;
+                    if action(ui, "Negrita", prose, "Aplica negrita al texto seleccionado o inserta sus marcas. Cmd/Ctrl+B. Disponible en LaTeX y Markdown.").clicked() {
+                        self.editor_mut().emphasize(true);
+                        self.changed_editor();
+                        ui.close();
+                    }
+                    if action(ui, "Cursiva", prose, "Aplica cursiva al texto seleccionado o inserta sus marcas. Cmd/Ctrl+I. Disponible en LaTeX y Markdown.").clicked() {
+                        self.editor_mut().emphasize(false);
+                        self.changed_editor();
+                        ui.close();
+                    }
+                    ui.separator();
+                    if action(ui, "Símbolo LaTeX…", latex, "Elige un símbolo y lo inserta en el cursor. Cmd/Ctrl+T. Disponible en documentos LaTeX.").clicked() {
+                        self.symbols = true;
+                        ui.close();
+                    }
+                    if action(ui, "Tabla LaTeX…", latex, "Elige filas, columnas y alineación antes de insertar la tabla. Disponible en documentos LaTeX.").clicked() {
+                        self.table = true;
+                        ui.close();
+                    }
+                    if action(ui, "Figura LaTeX…", latex && saved_source, "Elige una imagen e inserta una figura con pie y etiqueta. Guarda el documento LaTeX primero.").clicked() {
+                        self.insert_figure();
+                        ui.close();
+                    }
+                    if action(ui, "Cita o referencia LaTeX…", latex, "Abre las etiquetas y la bibliografía del proyecto para insertar una referencia o una cita. Disponible en LaTeX.").clicked() {
+                        self.references = true;
+                        self.outline = false;
+                        self.config.show_sidebar = true;
+                        ui.close();
+                    }
+                    ui.add_enabled_ui(latex, |ui| {
+                        for (label, before, after) in [
+                            ("Matemática en línea", "\\(", "\\)"),
+                            ("Ecuación centrada", "\\[\n", "\n\\]"),
+                            ("Sección", "\\section{", "}"),
+                            ("Subsección", "\\subsection{", "}"),
+                            ("Subrayado", "\\underline{", "}"),
+                        ] {
+                            if action(ui, label, true, "Inserta las marcas LaTeX alrededor de la selección o en el cursor.").clicked() {
+                                self.editor_mut().wrap(before, after);
+                                self.changed_editor();
+                                ui.close();
+                            }
                         }
-                    }
-                    if self.tool_rx.is_some() {
-                        ui.spinner();
-                    }
-                    if let Some(root) = self.root() {
-                        ui.label(
-                            RichText::new(format!(
-                                "Principal: {}",
-                                root.file_name().unwrap_or_default().to_string_lossy()
-                            ))
-                            .color(col(self.theme.muted())),
-                        )
-                        .on_hover_text(root.display().to_string());
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(RichText::new("MiyuLaTeX").color(col(self.theme.muted())));
+                        ui.menu_button("Entorno LaTeX", |ui| {
+                            ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                                for (name, body) in &catalog().environments {
+                                    if action(ui, name, true, "Inserta el inicio, el contenido y el cierre de este entorno.").clicked() {
+                                        let args = catalog().env_args.get(name).map_or("", String::as_str);
+                                        self.insert_snippet(&format!("\\begin{{{name}}}{args}\n    {}\n\\end{{{name}}}", body.replace('\n', "\n    ")));
+                                        ui.close();
+                                    }
+                                }
+                            });
+                        });
                     });
                 });
-            });
-    }
-    fn sidebar(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::left("files")
-            .frame(egui::Frame::side_top_panel(ui.style()).fill(col(self.theme.surface)))
-            .default_size(210.0)
-            .min_size(150.0)
-            .show(ui, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    if ui
-                        .selectable_label(!self.outline && !self.references, "Archivos")
-                        .clicked()
-                    {
-                        self.outline = false;
-                        self.references = false;
+                ui.menu_button("LaTeX", |ui| {
+                    if action(ui, "Compilar", !compiling && (latex || saved_source), "Guarda los archivos LaTeX del documento y genera su PDF. F5 o Cmd/Ctrl+R. Requiere un documento LaTeX y ninguna compilación en curso.").clicked() {
+                        self.compile(false, &ctx);
+                        ui.close();
                     }
-                    if ui.selectable_label(self.outline, "Esquema").clicked() {
-                        self.outline = true;
-                        self.references = false;
+                    if action(ui, "Detener compilación", compiling && !self.cancel.load(Ordering::Relaxed), "Detiene la compilación en curso, aunque hayas cambiado de pestaña.").clicked() {
+                        self.cancel.store(true, Ordering::Relaxed);
+                        self.message = "Deteniendo la compilación…".into();
+                        ui.close();
                     }
-                    if ui
-                        .selectable_label(self.references, "Referencias")
-                        .clicked()
-                    {
-                        self.outline = false;
-                        self.references = true;
+                    if action(ui, "Recompilar desde cero", !compiling && saved_source, "Elimina los archivos auxiliares y genera de nuevo el PDF. Requiere un archivo LaTeX guardado y ninguna compilación en curso.").clicked() {
+                        if self.clean_aux() { self.compile(false, &ctx); }
+                        ui.close();
+                    }
+                    if action(ui, "Limpiar archivos auxiliares", !compiling && saved_source, "Elimina solo los archivos temporales de LaTeX. Conserva los archivos originales y el PDF. Requiere un archivo LaTeX guardado y ninguna compilación en curso.").clicked() {
+                        self.clean_aux();
+                        ui.close();
+                    }
+                    ui.separator();
+                    if action(ui, "Configurar proyecto LaTeX…", true, "Elige el archivo principal y el motor para la carpeta de proyecto actual.").clicked() {
+                        self.project_options = true;
+                        ui.close();
+                    }
+                    if ui.checkbox(&mut self.config.autocompile, "Compilar al dejar de escribir").on_hover_text("Compila automáticamente los documentos LaTeX guardados.").changed() {
+                        self.preferences_changed(&ctx);
+                    }
+                    if ui.checkbox(&mut self.config.autosave, "Guardar LaTeX y bibliografía automáticamente").on_hover_text("Guarda los archivos LaTeX abiertos tras 2 segundos sin escribir.").changed() {
+                        self.preferences_changed(&ctx);
+                    }
+                    ui.separator();
+                    if action(ui, "Contar palabras del proyecto…", tool_ready && saved_source, "Cuenta la prosa del proyecto LaTeX. Requiere un archivo LaTeX guardado y ninguna otra operación en curso.").clicked() {
+                        self.count_words(&ctx);
+                        ui.close();
+                    }
+                    if action(ui, "Mostrar línea del cursor en PDF", tool_ready && saved_source && has_pdf, "Lleva el PDF a la línea del cursor. Cmd/Ctrl+Mayús+J. Requiere un archivo LaTeX guardado, su PDF y ninguna otra operación en curso.").clicked() {
+                        self.sync_to_pdf(&ctx);
+                        ui.close();
                     }
                 });
+                if action(ui, "Preferencias…", true, "Configura el editor y la apariencia para todos los proyectos. Cmd/Ctrl+,.").clicked() { self.settings = true; }
+                if action(ui, "Ayuda", true, "Consulta las funciones y los atajos de teclado. F1.").clicked() { self.help = true; }
+                });
+            });
+            ui.separator();
+            ui.horizontal_wrapped(|ui| {
+                if action(ui, "Nuevo documento…", true, "Crea un documento sin guardar. Cmd/Ctrl+N.").clicked() { self.templates = true; }
+                if action(ui, "Abrir archivo…", true, "Abre un documento, código, PDF o imagen. Cmd/Ctrl+O.").clicked() { self.open_dialog(); }
+                if action(ui, "Guardar", editable, "Guarda la pestaña activa. Cmd/Ctrl+S. PDF e imágenes son de solo lectura.").clicked() { self.save_document(self.active, false); }
                 ui.separator();
-                if self.references {
-                    ui.add(
-                        TextEdit::singleline(&mut self.reference_query)
-                            .hint_text("Clave, autor o título")
-                            .desired_width(f32::INFINITY),
-                    );
-                    let sources = self.completion_sources();
-                    let query = self.reference_query.to_lowercase();
-                    ScrollArea::vertical().id_salt("references").show(ui, |ui| {
+                if action(ui, "Nuevo proyecto…", true, "Crea una carpeta de proyecto. Cmd/Ctrl+Mayús+N.").clicked() { self.new_project(); }
+                if action(ui, "Abrir proyecto…", true, "Abre una carpeta de proyecto existente.").clicked() { self.folder_dialog(); }
+                ui.separator();
+                if action(ui, "Compilar", !compiling && (latex || saved_source), "Guarda los archivos LaTeX y genera el PDF. F5 o Cmd/Ctrl+R. Disponible en LaTeX.").clicked() { self.compile(false, &ctx); }
+                if compiling {
+                    ui.spinner();
+                    if action(ui, "Detener compilación", !self.cancel.load(Ordering::Relaxed), "Detiene la compilación en curso. Espera mientras el motor termina de detenerse.").clicked() {
+                        self.cancel.store(true, Ordering::Relaxed);
+                        self.message = "Deteniendo la compilación…".into();
+                    }
+                }
+                if self.tool_rx.is_some() { ui.spinner(); }
+                if let Some(root) = self.root() {
+                    ui.label(RichText::new(format!("Principal: {}", root.file_name().unwrap_or_default().to_string_lossy())).color(col(self.theme.muted())))
+                        .on_hover_text(root.display().to_string());
+                }
+            });
+        });
+    }
+    fn sidebar(&mut self, ui: &mut egui::Ui) {
+        if ui.ctx().viewport_rect().width() < 1020.0 {
+            let mut open = true;
+            egui::Window::new("Archivos, esquema y referencias")
+                .open(&mut open)
+                .collapsible(false)
+                .default_size([300.0, 440.0])
+                .show(ui.ctx(), |ui| self.sidebar_content(ui));
+            if !open {
+                self.config.show_sidebar = false;
+                self.preferences_changed(ui.ctx());
+            }
+        } else {
+            side_panel("files", self.config.sidebar_right)
+                .frame(egui::Frame::side_top_panel(ui.style()).fill(col(self.theme.surface)))
+                .default_size(240.0)
+                .min_size(180.0)
+                .show(ui, |ui| self.sidebar_content(ui));
+        }
+    }
+    fn sidebar_content(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
+            if ui
+                .selectable_label(!self.outline && !self.references, "Archivos")
+                .on_hover_text("Explora y gestiona los archivos de la carpeta del proyecto.")
+                .clicked()
+            {
+                self.outline = false;
+                self.references = false;
+            }
+            if ui
+                .selectable_label(self.outline, "Esquema")
+                .on_hover_text("Ve a una sección o definición del documento.")
+                .clicked()
+            {
+                self.outline = true;
+                self.references = false;
+            }
+            if ui
+                .selectable_label(self.references, "Referencias")
+                .on_hover_text("Inserta citas y referencias LaTeX o abre sus definiciones.")
+                .clicked()
+            {
+                self.outline = false;
+                self.references = true;
+            }
+        });
+        ui.separator();
+        if self.references {
+            ui.add(
+                TextEdit::singleline(&mut self.reference_query)
+                    .hint_text("Clave, autor o título")
+                    .desired_width(f32::INFINITY),
+            );
+            let sources = self.completion_sources();
+            let query = self.reference_query.to_lowercase();
+            ScrollArea::vertical().id_salt("references").show(ui, |ui| {
                         for (heading, command, targets) in [
                             ("Etiquetas", "ref", latex::labels(&sources)),
                             ("Bibliografía", "cite", latex::citations(&sources)),
@@ -1798,15 +1735,16 @@ impl App {
                                     continue;
                                 }
                                 found = true;
-                                ui.horizontal(|ui| {
+                                ui.horizontal_wrapped(|ui| {
                                     if ui
                                         .add_enabled(
                                             self.editor().format == Format::Latex,
-                                            egui::Button::new(&target.label),
+                                            egui::Button::new(format!("Insertar {}", target.label)),
                                         )
+                                        .on_disabled_hover_text("Abre un documento LaTeX para insertar una cita o referencia.")
                                         .on_hover_text(format!(
-                                            "{}\n{}:{}",
-                                            target.detail,
+                                            "Insertar \\{command}{{{}}}\n{}\n{}:{}",
+                                            target.label, target.detail,
                                             target.path.display(),
                                             target.row + 1
                                         ))
@@ -1818,8 +1756,8 @@ impl App {
                                         ));
                                     }
                                     if ui
-                                        .small_button("Ir")
-                                        .on_hover_text("Abrir definición")
+                                        .button("Ver origen")
+                                        .on_hover_text("Abre el archivo y la línea donde se define esta etiqueta o cita.")
                                         .clicked()
                                     {
                                         self.jump(&target);
@@ -1832,140 +1770,172 @@ impl App {
                             ui.separator();
                         }
                     });
-                } else if self.outline {
-                    let mut outline = self.source_outline.clone();
-                    if self.editor().format != Format::Latex {
-                        outline.clear();
-                        for (row, level, title) in self.editor().outline() {
-                            outline.push((
-                                Target {
-                                    path: self.editor().path.clone().unwrap_or_default(),
-                                    row: *row,
-                                    col: 0,
-                                    label: title.clone(),
-                                    detail: String::new(),
-                                },
-                                *level,
-                            ));
-                        }
-                    } else {
-                        for doc in &self.documents {
-                            if doc.editor.format != Format::Latex {
-                                continue;
-                            }
-                            let path = doc.editor.path.clone().unwrap_or_default();
-                            if !self.source_cache.iter().any(|s| s.path == path)
-                                && doc.id != self.documents[self.active].id
-                            {
-                                continue;
-                            }
-                            outline.retain(|(target, _)| target.path != path);
-                            for (row, level, title) in doc.editor.outline() {
-                                outline.push((
-                                    Target {
-                                        path: path.clone(),
-                                        row: *row,
-                                        col: 0,
-                                        label: title.clone(),
-                                        detail: String::new(),
-                                    },
-                                    *level,
-                                ));
-                            }
-                        }
-                    }
-                    if outline.is_empty() {
-                        ui.label("No hay secciones en este documento.");
-                    }
-                    let mut jump = None;
-                    // Solo se dibujan las filas visibles.
-                    ScrollArea::vertical().id_salt("outline").show_rows(
-                        ui,
-                        list_row_height(ui),
-                        outline.len(),
-                        |ui, rows| {
-                            // Filas de una línea: todas miden lo mismo.
-                            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-                            for (target, level) in &outline[rows] {
-                                if ui
-                                    .selectable_label(
-                                        self.editor().cursor.row == target.row
-                                            && self.editor().path.as_ref() == Some(&target.path),
-                                        format!(
-                                            "{}{}",
-                                            "  ".repeat(level.saturating_sub(2)),
-                                            target.label
-                                        ),
-                                    )
-                                    .on_hover_text(format!(
-                                        "{}:{}",
-                                        target.path.display(),
-                                        target.row + 1
-                                    ))
-                                    .clicked()
-                                {
-                                    jump = Some(target.clone());
-                                }
-                            }
+        } else if self.outline {
+            let mut outline = self.source_outline.clone();
+            if self.editor().format != Format::Latex {
+                outline.clear();
+                for (row, level, title) in self.editor().outline() {
+                    outline.push((
+                        Target {
+                            path: self.editor().path.clone().unwrap_or_default(),
+                            row: *row,
+                            col: 0,
+                            label: title.clone(),
+                            detail: String::new(),
                         },
-                    );
-                    if let Some(target) = jump {
-                        if target.path.as_os_str().is_empty() {
-                            self.editor_mut().goto(target.row, 0);
-                            self.sync_cursor = true;
-                            self.focus_editor = true;
-                        } else {
-                            self.jump(&target);
-                        }
+                        *level,
+                    ));
+                }
+            } else {
+                for doc in &self.documents {
+                    if doc.editor.format != Format::Latex {
+                        continue;
                     }
-                } else {
-                    ui.label(
-                        RichText::new(
-                            self.project
-                                .file_name()
-                                .unwrap_or_default()
-                                .to_string_lossy(),
-                        )
-                        .color(col(self.theme.muted())),
-                    )
-                    .on_hover_text(self.project.display().to_string());
-                    ui.horizontal_wrapped(|ui| {
-                        if ui.small_button("Carpeta…").clicked() {
-                            self.folder_dialog();
-                        }
+                    let path = doc.editor.path.clone().unwrap_or_default();
+                    if !self.source_cache.iter().any(|s| s.path == path)
+                        && doc.id != self.documents[self.active].id
+                    {
+                        continue;
+                    }
+                    outline.retain(|(target, _)| target.path != path);
+                    for (row, level, title) in doc.editor.outline() {
+                        outline.push((
+                            Target {
+                                path: path.clone(),
+                                row: *row,
+                                col: 0,
+                                label: title.clone(),
+                                detail: String::new(),
+                            },
+                            *level,
+                        ));
+                    }
+                }
+            }
+            if outline.is_empty() {
+                ui.label("No hay secciones en este documento.");
+            }
+            let mut jump = None;
+            // Solo se dibujan las filas visibles.
+            ScrollArea::vertical().id_salt("outline").show_rows(
+                ui,
+                list_row_height(ui),
+                outline.len(),
+                |ui, rows| {
+                    // Filas de una línea: todas miden lo mismo.
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                    for (target, level) in &outline[rows] {
                         if ui
-                            .small_button("Nuevo…")
-                            .on_hover_text("Crear un archivo en el proyecto")
+                            .selectable_label(
+                                self.editor().cursor.row == target.row
+                                    && self.editor().path.as_ref() == Some(&target.path),
+                                format!("{}{}", "  ".repeat(level.saturating_sub(2)), target.label),
+                            )
+                            .on_hover_text(format!("{}:{}", target.path.display(), target.row + 1))
                             .clicked()
                         {
-                            self.new_file();
+                            jump = Some(target.clone());
                         }
-                        if ui.small_button("Añadir…").clicked() {
+                    }
+                },
+            );
+            if let Some(target) = jump {
+                if target.path.as_os_str().is_empty() {
+                    self.editor_mut().goto(target.row, 0);
+                    self.sync_cursor = true;
+                    self.focus_editor = true;
+                } else {
+                    self.jump(&target);
+                }
+            }
+        } else {
+            // Una sola fila: el nombre a la izquierda y las acciones a la derecha,
+            // para que la barra estrecha no las apile.
+            ui.horizontal(|ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.menu_button("…", |ui| {
+                        if action(
+                            ui,
+                            "Abrir proyecto…",
+                            true,
+                            "Elige otra carpeta de proyecto.",
+                        )
+                        .clicked()
+                        {
+                            self.folder_dialog();
+                            ui.close();
+                        }
+                        if action(
+                            ui,
+                            "Añadir archivos…",
+                            true,
+                            "Copia archivos existentes al proyecto sin sobrescribirlos.",
+                        )
+                        .clicked()
+                        {
                             self.add_files();
+                            ui.close();
                         }
-                        if ui
-                            .small_button("Recargar")
-                            .on_hover_text("Volver a leer la carpeta del proyecto")
-                            .clicked()
+                        if action(
+                            ui,
+                            "Actualizar lista",
+                            true,
+                            "Vuelve a leer los nombres de archivos y las referencias del proyecto.",
+                        )
+                        .clicked()
                         {
                             self.files = project_files(&self.project);
                             self.refresh_sources();
+                            ui.close();
                         }
+                    })
+                    .response
+                    .on_hover_text("Más acciones del proyecto.");
+                    if action(
+                        ui,
+                        "+",
+                        true,
+                        "Crea un archivo nuevo dentro de este proyecto.",
+                    )
+                    .clicked()
+                    {
+                        self.new_file();
+                    }
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                        ui.label(
+                            RichText::new(
+                                self.project
+                                    .file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy(),
+                            )
+                            .color(col(self.theme.muted())),
+                        )
+                        .on_hover_text(self.project.display().to_string());
                     });
-                    ui.add(
-                        TextEdit::singleline(&mut self.file_query)
-                            .hint_text("Filtrar archivos")
-                            .desired_width(f32::INFINITY),
-                    );
-                    self.file_tree(ui);
-                }
+                });
             });
+            ui.add(
+                TextEdit::singleline(&mut self.file_query)
+                    .hint_text("Filtrar archivos")
+                    .desired_width(f32::INFINITY),
+            );
+            self.file_tree(ui);
+        }
     }
     fn pdf(&self) -> &Preview {
         self.documents[self.active]
             .pdf
             .as_ref()
             .unwrap_or(&self.preview)
+    }
+    fn pdf_path(&self) -> Option<&Path> {
+        if self.editor().format == Format::Pdf || self.root().is_some() {
+            self.pdf().path.as_deref()
+        } else {
+            None
+        }
     }
     fn pdf_mut(&mut self) -> &mut Preview {
         self.documents[self.active]
@@ -1974,37 +1944,44 @@ impl App {
             .unwrap_or(&mut self.preview)
     }
     fn pdf_panel(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::right("preview")
+        side_panel("preview", !self.config.preview_left)
             .default_size(430.0)
             .min_size(230.0)
             .show(ui, |ui| self.pdf_view(ui));
     }
     fn pdf_view(&mut self, ui: &mut egui::Ui) {
+        let count = self.pdf().count;
+        let has_pdf = self.pdf_path().is_some();
         ui.horizontal_wrapped(|ui| {
             ui.label("PDF");
-            if ui
-                .add_enabled(self.pdf().page > 0, egui::Button::new("‹"))
-                .on_hover_text("Página anterior")
-                .clicked()
+            if action(
+                ui,
+                "Anterior",
+                count > 0 && self.pdf().page > 0,
+                "Muestra la página anterior del PDF.",
+            )
+            .clicked()
             {
                 self.pdf_mut().change_page(-1);
             }
-            let count = self.pdf().count;
             let mut page = if count == 0 { 0 } else { self.pdf().page + 1 };
             if count == 0 {
                 ui.label("0");
             } else if ui
                 .add(egui::DragValue::new(&mut page).range(1..=count))
-                .on_hover_text("Ir a página")
+                .on_hover_text("Número de página. Escribe un número para ir a esa página.")
                 .changed()
             {
                 self.pdf_mut().go_to(page.saturating_sub(1));
             }
             ui.label(format!("/ {count}"));
-            if ui
-                .add_enabled(self.pdf().page + 1 < count, egui::Button::new("›"))
-                .on_hover_text("Página siguiente")
-                .clicked()
+            if action(
+                ui,
+                "Siguiente",
+                self.pdf().page + 1 < count,
+                "Muestra la página siguiente del PDF.",
+            )
+            .clicked()
             {
                 self.pdf_mut().change_page(1);
             }
@@ -2013,53 +1990,58 @@ impl App {
             }
         });
         ui.horizontal_wrapped(|ui| {
-            if ui.small_button("−").on_hover_text("Reducir zoom").clicked() {
+            let zoom = self.pdf().zoom;
+            let reduce = action(
+                ui,
+                "−",
+                count > 0 && zoom > 50.5,
+                "Reducir zoom. Requiere un PDF cargado y un zoom mayor que 50 %.",
+            );
+            reduce.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::Button,
+                    reduce.enabled(),
+                    "Reducir zoom",
+                )
+            });
+            if reduce.clicked() {
                 self.pdf_mut().change_zoom(-1);
             }
-            ui.label(format!("{:.0} %", self.pdf().zoom));
-            if ui
-                .small_button("+")
-                .on_hover_text("Aumentar zoom")
-                .clicked()
-            {
+            ui.label(format!("{zoom:.0} %"));
+            let increase = action(
+                ui,
+                "+",
+                count > 0 && zoom < 299.5,
+                "Aumentar zoom. Requiere un PDF cargado y un zoom menor que 300 %.",
+            );
+            increase.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::Button,
+                    increase.enabled(),
+                    "Aumentar zoom",
+                )
+            });
+            if increase.clicked() {
                 self.pdf_mut().change_zoom(1);
             }
-            if ui
-                .small_button("Ajustar")
-                .on_hover_text("Ajustar la página al ancho del panel")
-                .clicked()
+            if action(
+                ui,
+                "Ajustar al ancho",
+                count > 0,
+                "Ajusta la página al ancho disponible. Requiere un PDF cargado.",
+            )
+            .clicked()
             {
                 self.pdf_mut().zoom = 100.0;
             }
-            if ui.small_button("Visor del sistema").clicked() {
-                self.open_pdf();
-            }
-            if ui
-                .add_enabled(self.pdf().path.is_some(), egui::Button::new("Exportar…"))
-                .clicked()
-            {
-                self.export_pdf();
-            }
-            if ui
-                .add_enabled(
-                    self.tool_rx.is_none() && self.root().is_some(),
-                    egui::Button::new("Código → PDF"),
-                )
-                .on_hover_text(
-                    "Muestra en el PDF la línea del cursor. Doble clic o Cmd+clic en el PDF abre su código.",
-                )
-                .clicked()
-            {
-                self.sync_to_pdf(ui.ctx());
-            }
-            if ui
-                .add_enabled(self.pdf().path.is_some(), egui::Button::new("Recargar"))
-                .clicked()
-                && let Some(path) = self.pdf().path.clone()
-                && let Err(e) = self.pdf_mut().load(&path)
-            {
-                self.message = e;
-            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            if action(ui, "Abrir en visor externo", has_pdf, "Abre este PDF en el visor del sistema. F6. Abre o compila un PDF primero.").clicked() { self.open_pdf(); }
+            if action(ui, "Exportar PDF…", has_pdf, "Guarda una copia de este PDF en otra ubicación. Requiere un PDF abierto o compilado.").clicked() { self.export_pdf(); }
+            if action(ui, "Mostrar línea en PDF", self.tool_rx.is_none() && self.root().is_some() && has_pdf, "Lleva el PDF a la línea del cursor. Cmd/Ctrl+Mayús+J. Requiere un archivo LaTeX guardado y su PDF.").clicked() { self.sync_to_pdf(ui.ctx()); }
+            if action(ui, "Recargar PDF", has_pdf, "Vuelve a leer este PDF del disco, sin compilar el documento.").clicked()
+                && let Some(path) = self.pdf_path().map(Path::to_path_buf)
+                && let Err(e) = self.pdf_mut().load(&path) { self.message = e; }
         });
         ui.separator();
         if !self.pdf().error.is_empty() {
@@ -2123,7 +2105,7 @@ impl App {
         for link in links.iter() {
             self.markdown_cache.add_link_hook(link);
         }
-        egui::Panel::right("markdown_preview")
+        side_panel("markdown_preview", !self.config.preview_left)
             .default_size(430.0)
             .min_size(230.0)
             .frame(egui::Frame::side_top_panel(ui.style()).fill(col(self.theme.bg)))
@@ -2168,7 +2150,14 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.log, false, "Problemas");
                     ui.selectable_value(&mut self.log, true, "Registro");
-                    if ui.small_button("Cerrar").clicked() {
+                    if action(
+                        ui,
+                        "Ocultar panel",
+                        true,
+                        "Oculta problemas y registro. F4 vuelve a mostrarlos.",
+                    )
+                    .clicked()
+                    {
                         self.panel = false;
                     }
                 });
@@ -2555,16 +2544,15 @@ impl App {
                                         doc.editor.title(),
                                         if doc.editor.dirty() { " *" } else { "" }
                                     );
-                                    if ui.selectable_label(i == self.active, label).clicked() {
-                                        activate = Some(i);
-                                    }
-                                    if ui
-                                        .small_button("×")
-                                        .on_hover_text("Cerrar documento")
-                                        .clicked()
-                                    {
-                                        close = Some(i);
-                                    }
+                                    ui.push_id(doc.id, |ui| {
+                                        if ui.selectable_label(i == self.active, label)
+                                            .on_hover_text(doc.editor.path.as_ref().map_or_else(|| "Documento sin guardar".into(), |p| p.display().to_string()))
+                                            .clicked() { activate = Some(i); }
+                                        let name = format!("Cerrar {}", doc.editor.title());
+                                        let response = ui.button("×").on_hover_text(&name);
+                                        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+                                        if response.clicked() { close = Some(i); }
+                                    });
                                 }
                                 if let Some(index) = activate {
                                     self.activate(index);
@@ -2585,7 +2573,7 @@ impl App {
                     let uri = format!("file://{}", self.editor().path.as_ref().unwrap().display());
                     egui::Frame::new().inner_margin(16.0).show(ui, |ui| {
                         ui.label("Imagen · solo lectura");
-                        if ui.button("Recargar").clicked() {
+                        if action(ui, "Recargar imagen", true, "Vuelve a leer esta imagen del disco.").clicked() {
                             ui.ctx().forget_image(&uri);
                         }
                         ui.separator();
@@ -2614,7 +2602,7 @@ impl App {
                         .fill(self.panel_fill())
                         .inner_margin(8.0)
                         .show(ui, |ui| {
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 ui.label("Buscar");
                                 let response = ui.add(
                                     TextEdit::singleline(&mut self.query)
@@ -2651,11 +2639,12 @@ impl App {
                                     let query = self.query.clone();
                                     self.editor_mut().search(&query);
                                 }
-                                if ui.button("Anterior").on_hover_text("Mayús+Enter").clicked() {
+                                let found = !self.editor().matches.is_empty();
+                                if action(ui, "Anterior", found, "Selecciona la coincidencia anterior. Mayús+Enter. Requiere coincidencias.").clicked() {
                                     step = Some(true);
                                     self.focus_editor = true;
                                 }
-                                if ui.button("Siguiente").on_hover_text("Enter").clicked() {
+                                if action(ui, "Siguiente", found, "Selecciona la coincidencia siguiente. Enter. Requiere coincidencias.").clicked() {
                                     step = Some(false);
                                     self.focus_editor = true;
                                 }
@@ -2670,27 +2659,30 @@ impl App {
                                 } else {
                                     ui.label(format!("{count} coincidencias"));
                                 }
-                                close |= ui.small_button("Cerrar").on_hover_text("Esc").clicked();
+                                close |= action(ui, "Cerrar búsqueda", true, "Cierra la búsqueda y vuelve al editor. Esc.").clicked();
                             });
-                            ui.horizontal(|ui| {
-                                ui.label("Reemplazar");
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label("Reemplazar por");
                                 ui.add(
                                     TextEdit::singleline(&mut self.replacement)
                                         .desired_width(180.0),
                                 );
-                                // Reemplaza la coincidencia seleccionada y pasa a la siguiente.
-                                if ui.button("Reemplazar").clicked() {
-                                    if self.editor().matches.contains(&self.editor().selection()) {
-                                        let replacement = self.replacement.clone();
-                                        self.editor_mut().insert(&replacement);
-                                        self.changed_editor();
-                                    }
+                                let selected = self.editor().matches.contains(&self.editor().selection());
+                                if action(ui, "Reemplazar coincidencia", selected, "Cambia solo la coincidencia seleccionada y pasa a la siguiente. Selecciona una coincidencia con Anterior o Siguiente.").clicked() {
+                                    let replacement = self.replacement.clone();
+                                    self.editor_mut().insert(&replacement);
+                                    self.changed_editor();
+                                    self.message = "Coincidencia reemplazada. Puedes deshacer el cambio.".into();
                                     step = Some(false);
+                                    self.focus_editor = true;
                                 }
-                                if ui.button("Todos").clicked() {
+                                if action(ui, "Reemplazar todas", !self.editor().matches.is_empty(), "Reemplaza todas las coincidencias del documento activo. Puedes deshacerlo en un paso. Requiere coincidencias.").clicked() {
+                                    let count = self.editor().matches.len();
                                     let replacement = self.replacement.clone();
                                     self.editor_mut().replace_all(&replacement);
                                     self.changed_editor();
+                                    self.message = format!("{count} coincidencias reemplazadas. Puedes deshacer el cambio.");
+                                    self.focus_editor = true;
                                 }
                             });
                         });
@@ -2794,6 +2786,8 @@ impl App {
                                 .margin(egui::vec2(8.0, 10.0))
                                 .desired_width(text_width)
                                 .desired_rows(1)
+                                // Ocupa todo el alto: un clic bajo el texto lleva el cursor al final.
+                                .min_size(egui::vec2(0.0, rect.height()))
                                 .code_editor()
                                 .event_filter(egui::EventFilter {
                                     tab: true,
@@ -2807,6 +2801,9 @@ impl App {
                                 // Pedir el foco otra vez borra el filtro de Tab y flechas.
                                 if !output.response.has_focus() {
                                     output.response.request_focus();
+                                    // Sin el foco egui reduce la selección al cursor:
+                                    // se vuelve a llevar al widget cuando ya lo tiene.
+                                    self.sync_cursor = true;
                                 }
                                 self.focus_editor = false;
                             }
@@ -2984,8 +2981,32 @@ impl App {
                         .show(&ctx, |ui| {
                             ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
                                 for (i, completion) in completions.iter().enumerate() {
+                                    // En el código, al lado va qué es cada sugerencia.
+                                    let text: egui::WidgetText =
+                                        if matches!(completion.kind.as_str(), "word" | "snippet") {
+                                            let mut job = LayoutJob::default();
+                                            job.append(
+                                                &completion.label,
+                                                0.0,
+                                                egui::TextFormat::simple(
+                                                    egui::TextStyle::Button.resolve(ui.style()),
+                                                    ui.visuals().text_color(),
+                                                ),
+                                            );
+                                            job.append(
+                                                &completion.detail,
+                                                12.0,
+                                                egui::TextFormat::simple(
+                                                    FontId::proportional(12.0),
+                                                    col(self.theme.muted()),
+                                                ),
+                                            );
+                                            job.into()
+                                        } else {
+                                            (&completion.label).into()
+                                        };
                                     let response = ui
-                                        .selectable_label(i == selected, &completion.label)
+                                        .selectable_label(i == selected, text)
                                         .on_hover_text(&completion.detail);
                                     if i == selected {
                                         response.scroll_to_me(None);
@@ -3072,16 +3093,16 @@ impl App {
                 if index != self.history_index {
                     self.history_index = index;
                     match fs::read_to_string(&self.history_versions[index]) {
-                        Ok(text) => self.history_text = text,
-                        Err(e) => { self.history_text.clear(); self.message = e.to_string(); }
+                        Ok(text) => self.history_text = Some(text),
+                        Err(e) => { self.history_text = None; self.message = e.to_string(); }
                     }
                 }
-                restore = ui.button("Restaurar en el editor").clicked();
+                restore = action(ui, "Restaurar versión en el editor", self.history_text.is_some(), "Reemplaza el texto del editor con esta versión. Puedes deshacerlo antes de guardar. Requiere una versión que se pueda leer.").clicked();
                 let current = self.documents.iter().find(|d| d.editor.path == self.history_file).map(|d| d.editor.text()).unwrap_or_default();
                 ui.columns(2, |columns| {
                     columns[0].label("Versión anterior");
                     ScrollArea::both().id_salt("history_old").max_height(420.0).show(&mut columns[0], |ui| {
-                        let mut text = self.history_text.as_str();
+                        let mut text = self.history_text.as_deref().unwrap_or_default();
                         ui.add(TextEdit::multiline(&mut text).code_editor().desired_width(f32::INFINITY));
                     });
                     columns[1].label("Texto actual");
@@ -3092,10 +3113,13 @@ impl App {
                 });
             });
             self.history = open;
-            if restore && let Some(path) = self.history_file.clone() {
+            if restore
+                && let Some(path) = self.history_file.clone()
+                && let Some(text) = self.history_text.clone()
+            {
                 match self.open(&path) {
                     Ok(()) => {
-                        let text = self.history_text.replace("\r\n", "\n");
+                        let text = text.replace("\r\n", "\n");
                         self.editor_mut().set_text(&text);
                         self.changed_editor();
                         self.history = false;
@@ -3127,10 +3151,22 @@ impl App {
                             ui.selectable_value(&mut self.table_alignment, alignment, label);
                         }
                     });
-                    insert = ui.button("Insertar tabla").clicked();
+                    ui.horizontal_wrapped(|ui| {
+                        insert = action(
+                            ui,
+                            "Insertar tabla",
+                            self.editor().format == Format::Latex,
+                            "Inserta la tabla en el documento LaTeX activo.",
+                        )
+                        .clicked();
+                        if action(ui, "Cancelar", true, "Cierra sin insertar una tabla.").clicked()
+                        {
+                            ui.close_kind(egui::UiKind::Window);
+                        }
+                    });
                 });
             self.table = open;
-            if insert {
+            if insert && self.editor().format == Format::Latex {
                 self.insert_snippet(&latex::table(
                     self.table_rows,
                     self.table_columns,
@@ -3152,10 +3188,101 @@ impl App {
                 self.word_count = None;
             }
         }
+        if self.project_options {
+            let mut open = true;
+            let mut changed = false;
+            egui::Window::new("Configurar proyecto LaTeX")
+                .open(&mut open)
+                .collapsible(false)
+                .resizable(false)
+                .default_width(420.0)
+                .show(ctx, |ui| {
+                    ui.label(self.project.display().to_string());
+                    ui.label("Estos ajustes se guardan en este proyecto al cambiarlos.");
+                    ui.separator();
+                    ui.label("Archivo principal del proyecto");
+                    let main = self
+                        .project_settings
+                        .main
+                        .as_ref()
+                        .map_or("Automático".into(), |p| p.display().to_string());
+                    egui::ComboBox::from_id_salt("main_document")
+                        .selected_text(main)
+                        .width(350.0)
+                        .show_ui(ui, |ui| {
+                            changed |= ui
+                                .selectable_value(
+                                    &mut self.project_settings.main,
+                                    None,
+                                    "Automático",
+                                )
+                                .changed();
+                            for file in &self.files {
+                                if file.extension().is_some_and(|e| e == "tex")
+                                    && let Ok(path) = file.strip_prefix(&self.project)
+                                {
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.project_settings.main,
+                                            Some(path.into()),
+                                            path.display().to_string(),
+                                        )
+                                        .changed();
+                                }
+                            }
+                        });
+                    ui.label("Motor de este proyecto");
+                    egui::ComboBox::from_id_salt("project_engine")
+                        .selected_text(if self.project_settings.engine.is_empty() {
+                            "Usar preferencia general"
+                        } else {
+                            &self.project_settings.engine
+                        })
+                        .show_ui(ui, |ui| {
+                            changed |= ui
+                                .selectable_value(
+                                    &mut self.project_settings.engine,
+                                    String::new(),
+                                    "Usar preferencia general",
+                                )
+                                .changed();
+                            changed |= ui
+                                .selectable_value(
+                                    &mut self.project_settings.engine,
+                                    "auto".into(),
+                                    "Automático y directiva !TEX program",
+                                )
+                                .changed();
+                            for engine in compiler::ENGINES {
+                                changed |= ui
+                                    .selectable_value(
+                                        &mut self.project_settings.engine,
+                                        (*engine).into(),
+                                        *engine,
+                                    )
+                                    .changed();
+                            }
+                        });
+                    ui.separator();
+                    if action(
+                        ui,
+                        "Cerrar configuración",
+                        true,
+                        "Cierra esta ventana. Los cambios ya están guardados en el proyecto.",
+                    )
+                    .clicked()
+                    {
+                        ui.close_kind(egui::UiKind::Window);
+                    }
+                });
+            self.project_options = open;
+            if changed {
+                self.project_changed();
+            }
+        }
         if self.settings {
             let mut open = true;
             let mut changed = false;
-            let mut project_changed = false;
             egui::Window::new("Preferencias")
                 .open(&mut open)
                 .resizable(false)
@@ -3163,6 +3290,9 @@ impl App {
                 .default_height(640.0)
                 .default_width(420.0)
                 .show(ctx, |ui| {
+                    if action(ui, "Cerrar preferencias", true, "Cierra esta ventana. Los cambios ya están guardados.").clicked() { ui.close_kind(egui::UiKind::Window); }
+                    ui.label("Estos ajustes se aplican a todos los proyectos y se guardan al cambiarlos.");
+                    ui.separator();
                     ui.label("Tema");
                     egui::ComboBox::from_id_salt("theme")
                         .selected_text(&self.config.theme)
@@ -3180,12 +3310,10 @@ impl App {
                     ui.separator();
                     ui.label("Fondo de la interfaz");
                     ui.horizontal(|ui| {
-                        if ui.button("Elegir imagen…").clicked() {
+                        if action(ui, "Elegir fondo…", true, "Elige una imagen para el fondo de la interfaz.").clicked() {
                             self.choose_background(ctx);
                         }
-                        if ui
-                            .add_enabled(self.backdrop.image.is_some(), egui::Button::new("Quitar"))
-                            .clicked()
+                        if action(ui, "Quitar fondo", self.backdrop.image.is_some(), "Elimina la imagen de fondo de la interfaz. Requiere una imagen de fondo.").clicked()
                         {
                             self.config.background.clear();
                             self.backdrop = Backdrop::default();
@@ -3233,69 +3361,6 @@ impl App {
                             .changed();
                     }
                     ui.separator();
-                    ui.label("Archivo principal del proyecto");
-                    let main = self
-                        .project_settings
-                        .main
-                        .as_ref()
-                        .map_or("Automático".into(), |p| p.display().to_string());
-                    egui::ComboBox::from_id_salt("main_document")
-                        .selected_text(main)
-                        .width(350.0)
-                        .show_ui(ui, |ui| {
-                            project_changed |= ui
-                                .selectable_value(
-                                    &mut self.project_settings.main,
-                                    None,
-                                    "Automático",
-                                )
-                                .changed();
-                            for file in &self.files {
-                                if file.extension().is_some_and(|e| e == "tex")
-                                    && let Ok(path) = file.strip_prefix(&self.project)
-                                {
-                                    project_changed |= ui
-                                        .selectable_value(
-                                            &mut self.project_settings.main,
-                                            Some(path.into()),
-                                            path.display().to_string(),
-                                        )
-                                        .changed();
-                                }
-                            }
-                        });
-                    ui.label("Motor de este proyecto");
-                    egui::ComboBox::from_id_salt("project_engine")
-                        .selected_text(if self.project_settings.engine.is_empty() {
-                            "Usar preferencia general"
-                        } else {
-                            &self.project_settings.engine
-                        })
-                        .show_ui(ui, |ui| {
-                            project_changed |= ui
-                                .selectable_value(
-                                    &mut self.project_settings.engine,
-                                    String::new(),
-                                    "Usar preferencia general",
-                                )
-                                .changed();
-                            project_changed |= ui
-                                .selectable_value(
-                                    &mut self.project_settings.engine,
-                                    "auto".into(),
-                                    "Automático y directiva !TEX program",
-                                )
-                                .changed();
-                            for engine in compiler::ENGINES {
-                                project_changed |= ui
-                                    .selectable_value(
-                                        &mut self.project_settings.engine,
-                                        (*engine).into(),
-                                        *engine,
-                                    )
-                                    .changed();
-                            }
-                        });
                     ui.label("Motor LaTeX general");
                     let available = compiler::engines();
                     egui::ComboBox::from_id_salt("engine")
@@ -3330,15 +3395,6 @@ impl App {
                             "Guardar LaTeX y bibliografía tras 2 s sin escribir",
                         )
                         .changed();
-                    if ui
-                        .add_enabled(
-                            self.compile_rx.is_none(),
-                            egui::Button::new("Limpiar auxiliares LaTeX"),
-                        )
-                        .clicked()
-                    {
-                        self.clean_aux();
-                    }
                     changed |= ui
                         .checkbox(
                             &mut self.config.soft_wrap,
@@ -3373,11 +3429,10 @@ impl App {
                         &self.theme,
                         &mut self.message,
                     );
+                    ui.separator();
+
                 });
             self.settings = open;
-            if project_changed {
-                self.project_changed();
-            }
             if changed {
                 self.preferences_changed(ctx);
             }
@@ -3389,26 +3444,30 @@ impl App {
             egui::Window::new("Nuevo documento")
                 .open(&mut open)
                 .resizable(false)
+                .vscroll(true)
+                .default_height(560.0)
                 .default_width(420.0)
                 .show(ctx, |ui| {
+                    if action(ui, "Cancelar", true, "Cierra sin crear un documento.").clicked() { ui.close_kind(egui::UiKind::Window); }
+                    ui.label("Documento vacío");
                     ui.horizontal_wrapped(|ui| {
                         for (label, name) in [
-                            ("LaTeX vacío", "sin-titulo.tex"),
+                            ("LaTeX", "sin-titulo.tex"),
                             ("Bibliografía", "referencias.bib"),
                             ("Markdown", "sin-titulo.md"),
                             ("Texto", "sin-titulo.txt"),
-                            ("Código Python", "sin-titulo.py"),
-                            ("Código Rust", "sin-titulo.rs"),
                         ] {
-                            if ui.button(label).clicked() {
-                                blank = Some(name);
-                            }
+                            if action(ui, label, true, "Abre un documento vacío de este formato. Elige su ubicación al guardar.").clicked() { blank = Some(name); }
+                        }
+                        for (language, name) in workspace::CODE_FILES {
+                            if action(ui, language, true, "Abre un archivo de código vacío de este lenguaje.").clicked() { blank = Some(*name); }
                         }
                     });
                     ui.separator();
+                    ui.label("Plantillas LaTeX");
                     for (i, template) in catalog().templates.iter().enumerate() {
                         if ui
-                            .button(&template.title)
+                            .button(format!("Crear {}", template.title))
                             .on_hover_text(&template.description)
                             .clicked()
                         {
@@ -3420,6 +3479,8 @@ impl App {
                                 .color(col(self.theme.muted())),
                         );
                     }
+                    ui.separator();
+
                 });
             self.templates = open;
             if let Some(name) = blank {
@@ -3443,6 +3504,16 @@ impl App {
                             .hint_text("Buscar símbolo o comando")
                             .desired_width(f32::INFINITY),
                     );
+                    if action(
+                        ui,
+                        "Cerrar símbolos",
+                        true,
+                        "Cierra sin insertar un símbolo.",
+                    )
+                    .clicked()
+                    {
+                        ui.close_kind(egui::UiKind::Window);
+                    }
                     let query = self.symbol_query.to_lowercase();
                     ScrollArea::vertical().show(ui, |ui| {
                         for symbol in &catalog().symbols {
@@ -3453,10 +3524,16 @@ impl App {
                                 continue;
                             }
                             if ui
-                                .button(format!(
-                                    "{}  {}  {}",
-                                    symbol.char, symbol.latex, symbol.name
-                                ))
+                                .add_enabled(
+                                    self.editor().format == Format::Latex,
+                                    egui::Button::new(format!(
+                                        "Insertar {}  {}  {}",
+                                        symbol.char, symbol.latex, symbol.name
+                                    )),
+                                )
+                                .on_hover_text(
+                                    "Inserta este comando en el cursor del documento LaTeX activo.",
+                                )
                                 .clicked()
                             {
                                 chosen = Some(symbol.latex.clone());
@@ -3465,7 +3542,7 @@ impl App {
                     });
                 });
             self.symbols = open;
-            if let Some(text) = chosen {
+            if let Some(text) = chosen.filter(|_| self.editor().format == Format::Latex) {
                 self.editor_mut().insert(&text);
                 self.changed_editor();
                 self.symbols = false;
@@ -3480,7 +3557,19 @@ impl App {
                 .show(ctx, |ui| {
                     let count = self.editor().lines.len().max(1);
                     ui.add(egui::DragValue::new(&mut self.line).range(1..=count));
-                    chosen = ui.button("Ir").clicked();
+                    ui.label("Número de línea");
+                    ui.horizontal_wrapped(|ui| {
+                        chosen = action(
+                            ui,
+                            "Ir a línea",
+                            self.editor().format.editable(),
+                            "Mueve el cursor a esta línea del documento activo.",
+                        )
+                        .clicked();
+                        if action(ui, "Cancelar", true, "Cierra sin mover el cursor.").clicked() {
+                            ui.close_kind(egui::UiKind::Window);
+                        }
+                    });
                 });
             self.goto = open;
             if chosen {
@@ -3496,6 +3585,8 @@ impl App {
             egui::Window::new("Ayuda")
                 .open(&mut open)
                 .resizable(false)
+                .vscroll(true)
+                .default_height(560.0)
                 .show(ctx, |ui| {
                     ui.label("MiyuLaTeX · LaTeX, Markdown, código, PDF e imágenes");
                     ui.separator();
@@ -3541,27 +3632,38 @@ impl App {
                     ui.label("F2, F3 y F4 muestran u ocultan paneles.");
                     ui.label("Markdown tiene vista previa y esquema de títulos.");
                     ui.label("PDF e imágenes se abren en pestañas de solo lectura.");
+                    if action(
+                        ui,
+                        "Cerrar ayuda",
+                        true,
+                        "Cierra la ayuda y vuelve al documento.",
+                    )
+                    .clicked()
+                    {
+                        ui.close_kind(egui::UiKind::Window);
+                    }
                 });
             self.help = open;
         }
         if let Some(pending) = self.pending {
-            let mut action = 0;
+            let mut choice = 0;
+            let (save_label, discard_label) = match pending {
+                Pending::Quit => ("Guardar y salir", "Salir sin guardar"),
+                Pending::Close(_) => ("Guardar y cerrar", "Cerrar sin guardar"),
+            };
             egui::Modal::new(Id::new("unsaved")).show(ctx, |ui| {
                 ui.heading("Hay cambios sin guardar");
-                ui.label("Guarda los documentos antes de cerrar.");
-                ui.horizontal(|ui| {
-                    if ui.button("Guardar y cerrar").clicked() {
-                        action = 1;
-                    }
-                    if ui.button("Descartar cambios").clicked() {
-                        action = 2;
-                    }
-                    if ui.button("Cancelar").clicked() {
-                        action = 3;
-                    }
+                match pending {
+                    Pending::Close(i) => { ui.label(format!("Se cerrará {}. Cerrar sin guardar pierde sus cambios.", self.documents[i].editor.title())); }
+                    Pending::Quit => { ui.label("Se cerrará la aplicación. Salir sin guardar pierde los cambios de los documentos abiertos."); }
+                }
+                ui.horizontal_wrapped(|ui| {
+                    if action(ui, save_label, true, "Guarda los cambios y completa el cierre. Si el guardado falla o se cancela, el documento sigue abierto.").clicked() { choice = 1; }
+                    if action(ui, discard_label, true, "Cierra y descarta los cambios sin guardar.").clicked() { choice = 2; }
+                    if action(ui, "Cancelar", true, "Cancela el cierre y conserva los documentos abiertos.").clicked() { choice = 3; }
                 });
             });
-            match action {
+            match choice {
                 1 => {
                     let saved = match pending {
                         Pending::Quit => self.save_all(),
@@ -3613,7 +3715,7 @@ impl App {
             ctx.send_viewport_cmd(ViewportCommand::Title(title));
         }
         self.toolbar(ui);
-        egui::Panel::bottom("status").show(ui, |ui| {
+        let status = egui::Panel::bottom("status").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(&self.message).size(13.0));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -3653,7 +3755,8 @@ impl App {
                 });
             });
         });
-        if self.config.show_sidebar && ctx.viewport_rect().width() >= 1020.0 {
+        let floor = status.response.rect.top();
+        if self.config.show_sidebar {
             self.sidebar(ui);
         }
         if self.config.show_preview {
@@ -3667,6 +3770,14 @@ impl App {
             self.problems(ui);
         }
         self.editor_panel(ui);
+        if self.config.mascot {
+            let busy = self.compile_rx.is_some();
+            let ok = self.result.as_ref().is_some_and(|r| r.ok);
+            if self.mascot.show(ui, floor, &self.theme, busy, ok) {
+                self.config.mascot = false;
+                self.preferences_changed(&ctx);
+            }
+        }
         self.dialogs(&ctx);
         self.workspace_dialogs(&ctx);
     }
@@ -3693,6 +3804,22 @@ impl App {
         if let Some(worker) = self.compile_thread.take() {
             let _ = worker.join();
         }
+    }
+}
+
+fn action(ui: &mut egui::Ui, label: &str, enabled: bool, help: &str) -> egui::Response {
+    ui.add_enabled(enabled, egui::Button::new(label))
+        .on_hover_text(help)
+        .on_disabled_hover_text(help)
+}
+
+/// Panel lateral en el lado elegido en Ver. Si los dos comparten lado, el de
+/// archivos queda en el borde de la ventana porque se dibuja primero.
+fn side_panel(id: &'static str, right: bool) -> egui::Panel {
+    if right {
+        egui::Panel::right(id)
+    } else {
+        egui::Panel::left(id)
     }
 }
 
@@ -4055,6 +4182,221 @@ mod tests {
         assert!(!app.editor().dirty());
         fs::remove_dir_all(folder).unwrap();
     }
+    #[test]
+    fn buttons_keep_their_purpose_across_documents() {
+        fn frame(
+            app: &mut App,
+            ctx: &egui::Context,
+            width: f32,
+            events: Vec<egui::Event>,
+        ) -> Vec<egui::accesskit::Node> {
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(width, 820.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ui| app.draw(ui),
+            );
+            output.textures_delta.clear();
+            output
+                .platform_output
+                .accesskit_update
+                .unwrap()
+                .nodes
+                .into_iter()
+                .map(|(_, node)| node)
+                .collect()
+        }
+        fn button(app: &mut App, ctx: &egui::Context, label: &str) -> egui::accesskit::Node {
+            frame(app, ctx, 1280.0, vec![]);
+            let nodes = frame(app, ctx, 1280.0, vec![]);
+            nodes
+                .iter()
+                .find(|node| {
+                    node.label() == Some(label) && node.role() == egui::accesskit::Role::Button
+                })
+                .unwrap_or_else(|| {
+                    panic!(
+                        "No aparece el botón {label}: {:?}",
+                        nodes
+                            .iter()
+                            .filter_map(|node| node.label())
+                            .collect::<Vec<_>>()
+                    )
+                })
+                .clone()
+        }
+        fn click(app: &mut App, ctx: &egui::Context, label: &str) {
+            let node = button(app, ctx, label);
+            assert!(!node.is_disabled(), "{label} está desactivado");
+            let rect = node.bounds().unwrap();
+            let pos = egui::pos2(
+                ((rect.x0 + rect.x1) / 2.0) as f32,
+                ((rect.y0 + rect.y1) / 2.0) as f32,
+            );
+            frame(app, ctx, 1280.0, vec![egui::Event::PointerMoved(pos)]);
+            for pressed in [true, false] {
+                frame(
+                    app,
+                    ctx,
+                    1280.0,
+                    vec![egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: Modifiers::NONE,
+                    }],
+                );
+            }
+        }
+        let folder = std::env::temp_dir().join(format!("miyu-buttons-{}", std::process::id()));
+        fs::create_dir_all(&folder).unwrap();
+        let folder = folder.canonicalize().unwrap();
+        let tex = folder.join("main.tex");
+        let md = folder.join("nota.md");
+        let code = folder.join("main.rs");
+        fs::write(
+            &tex,
+            "\\documentclass{article}\n\\begin{document}\nHola\n\\end{document}\n",
+        )
+        .unwrap();
+        fs::write(&md, "casa casa\n").unwrap();
+        fs::write(&code, "fn main() {}\n").unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut app = App::new(Some(tex.clone()), &ctx).unwrap();
+        app.config.autocompile = false;
+        app.config.autosave = false;
+        app.config.show_preview = false;
+        app.config.show_sidebar = false;
+        app.backdrop = Backdrop::default();
+
+        // Project settings and app preferences open different windows.
+        click(&mut app, &ctx, "LaTeX");
+        click(&mut app, &ctx, "Configurar proyecto LaTeX…");
+        assert!(app.project_options && !app.settings);
+        click(&mut app, &ctx, "Cerrar configuración");
+        assert!(!app.project_options);
+        click(&mut app, &ctx, "Preferencias…");
+        assert!(app.settings && !app.project_options);
+        click(&mut app, &ctx, "Cerrar preferencias");
+        assert!(!app.settings);
+
+        // Cancelling document creation preserves the current tabs.
+        let documents = app.documents.len();
+        click(&mut app, &ctx, "Nuevo documento…");
+        assert!(app.templates);
+        click(&mut app, &ctx, "Cancelar");
+        assert!(!app.templates);
+        assert_eq!(app.documents.len(), documents);
+
+        // Each tab's close button targets that tab, including an inactive one.
+        app.open(&md).unwrap();
+        let md_index = app.active;
+        app.editor_mut().goto(0, 0);
+        app.editor_mut().insert("nuevo ");
+        app.changed_editor();
+        click(&mut app, &ctx, "Cerrar main.tex");
+        assert_eq!(app.documents.len(), 1);
+        assert_eq!(app.editor().path.as_ref(), Some(&md));
+        assert_eq!(md_index, 1);
+        click(&mut app, &ctx, "Guardar");
+        assert!(fs::read_to_string(&md).unwrap().starts_with("nuevo "));
+
+        // Search includes unsaved Markdown and code. A single replacement changes one match.
+        app.editor_mut().goto(0, 0);
+        app.editor_mut().insert("pendiente ");
+        app.changed_editor();
+        app.project_query = "pendiente".into();
+        app.search_project();
+        assert_eq!(app.search_results.len(), 1);
+        assert_eq!(app.search_results[0].path, md);
+        click(&mut app, &ctx, "Editar");
+        click(&mut app, &ctx, "Buscar y reemplazar…");
+        app.query = "casa".into();
+        app.replacement = "hogar".into();
+        assert!(button(&mut app, &ctx, "Reemplazar coincidencia").is_disabled());
+        click(&mut app, &ctx, "Siguiente");
+        assert_eq!(app.editor().selected(), "casa");
+        click(&mut app, &ctx, "Reemplazar coincidencia");
+        assert_eq!(app.editor().text().matches("casa").count(), 1);
+        assert_eq!(app.editor().text().matches("hogar").count(), 1);
+        click(&mut app, &ctx, "Reemplazar todas");
+        assert!(!app.editor().text().contains("casa"));
+        click(&mut app, &ctx, "Cerrar búsqueda");
+        click(&mut app, &ctx, "Editar");
+        click(&mut app, &ctx, "Deshacer");
+        assert_eq!(app.editor().text().matches("casa").count(), 1);
+        app.open(&code).unwrap();
+        app.editor_mut().goto(0, 0);
+        app.editor_mut().insert("// pendiente\n");
+        app.project_query = "pendiente".into();
+        app.search_project();
+        assert_eq!(app.search_results.len(), 2);
+
+        // Stopping a compile remains available from a code tab.
+        let (_sender, receiver) = mpsc::channel();
+        app.compile_rx = Some(receiver);
+        app.cancel = Arc::new(AtomicBool::new(false));
+        click(&mut app, &ctx, "Detener compilación");
+        assert!(app.cancel.load(Ordering::Relaxed));
+        app.compile_rx = None;
+        app.preview.path = Some(folder.join("otro.pdf"));
+        assert!(app.pdf_path().is_none());
+        click(&mut app, &ctx, "Archivo");
+        assert!(button(&mut app, &ctx, "Exportar PDF…").is_disabled());
+        click(&mut app, &ctx, "Archivo");
+
+        // Auxiliary cleanup works from a bibliography source and never runs during compilation.
+        app.open(&tex).unwrap();
+        fs::write(tex.with_extension("aux"), "temporal").unwrap();
+        let (_sender, receiver) = mpsc::channel();
+        app.compile_rx = Some(receiver);
+        assert!(!app.clean_aux());
+        assert!(tex.with_extension("aux").exists());
+        app.compile_rx = None;
+        assert!(app.clean_aux());
+        assert!(!tex.with_extension("aux").exists());
+        fs::write(folder.join("referencias.bib"), "").unwrap();
+        app.open(&folder.join("referencias.bib")).unwrap();
+        fs::write(tex.with_extension("aux"), "temporal").unwrap();
+        assert!(app.clean_aux());
+        assert!(!tex.with_extension("aux").exists());
+
+        // Toolbar actions remain within a small window even with larger UI text.
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        app.config.ui_font_size = 22.0;
+        app.apply_theme(&ctx);
+        frame(&mut app, &ctx, 480.0, vec![]);
+        let nodes = frame(&mut app, &ctx, 480.0, vec![]);
+        for label in [
+            "Nuevo documento…",
+            "Abrir archivo…",
+            "Guardar",
+            "Nuevo proyecto…",
+            "Abrir proyecto…",
+            "Compilar",
+            "Preferencias…",
+            "Ayuda",
+        ] {
+            let node = nodes
+                .iter()
+                .find(|n| n.label() == Some(label) && n.role() == egui::accesskit::Role::Button)
+                .unwrap();
+            let bounds = node.bounds().unwrap();
+            assert!(
+                bounds.x0 >= 0.0 && bounds.x1 <= 480.0,
+                "{label}: {bounds:?}"
+            );
+        }
+        fs::remove_dir_all(folder).unwrap();
+    }
+
     /// Tiempos por cuadro con documentos grandes, en reposo y tecleando:
     /// `cargo test --release rendimiento -- --ignored --nocapture`
     #[test]
@@ -4133,6 +4475,95 @@ mod tests {
                 command.1,
             );
         }
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn panels_follow_the_chosen_side() {
+        let folder = std::env::temp_dir().join(format!("miyu-sides-{}", std::process::id()));
+        fs::create_dir_all(&folder).unwrap();
+        let path = folder.join("nota.md");
+        fs::write(&path, "# Nota\n").unwrap();
+        let ctx = egui::Context::default();
+        let mut app = App::new(Some(path), &ctx).unwrap();
+        app.config.autosave = false;
+        app.config.show_sidebar = true;
+        app.config.show_preview = true;
+        app.backdrop = Backdrop::default();
+        let center = |ctx: &egui::Context, id: &'static str| {
+            egui::containers::panel::PanelState::load(ctx, egui::Id::new(id))
+                .unwrap()
+                .outer_rect
+                .center()
+                .x
+        };
+        tick(&mut app, &ctx, vec![]);
+        tick(&mut app, &ctx, vec![]);
+        assert!(center(&ctx, "files") < 640.0);
+        assert!(center(&ctx, "markdown_preview") > 640.0);
+
+        app.config.sidebar_right = true;
+        app.config.preview_left = true;
+        tick(&mut app, &ctx, vec![]);
+        tick(&mut app, &ctx, vec![]);
+        assert!(center(&ctx, "files") > 640.0);
+        assert!(center(&ctx, "markdown_preview") < 640.0);
+
+        // En el mismo lado, el panel de archivos queda en el borde de la ventana.
+        app.config.preview_left = false;
+        tick(&mut app, &ctx, vec![]);
+        tick(&mut app, &ctx, vec![]);
+        assert!(center(&ctx, "files") > center(&ctx, "markdown_preview"));
+        assert!(center(&ctx, "markdown_preview") > 640.0);
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn clicking_below_the_text_moves_the_cursor_to_the_end() {
+        let folder = std::env::temp_dir().join(format!("miyu-click-{}", std::process::id()));
+        fs::create_dir_all(&folder).unwrap();
+        let path = folder.join("main.rs");
+        fs::write(&path, "fn main() {}").unwrap();
+        let ctx = egui::Context::default();
+        let mut app = App::new(Some(path), &ctx).unwrap();
+        app.config.autosave = false;
+        app.config.show_preview = false;
+        app.config.show_sidebar = false;
+        app.backdrop = Backdrop::default();
+        let frame = |app: &mut App, events: Vec<egui::Event>| {
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1280.0, 820.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ui| app.draw(ui),
+            );
+            output.textures_delta.clear();
+        };
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![]);
+        assert_eq!(app.editor().cursor.col, 0);
+        // Muy por debajo de la única línea del documento.
+        let pos = egui::pos2(700.0, 600.0);
+        frame(&mut app, vec![egui::Event::PointerMoved(pos)]);
+        for pressed in [true, false] {
+            frame(
+                &mut app,
+                vec![egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                }],
+            );
+        }
+        frame(&mut app, vec![]);
+        assert_eq!((app.editor().cursor.row, app.editor().cursor.col), (0, 12));
+        assert!(ctx.memory(|m| m.has_focus(app.documents[app.active].id)));
         fs::remove_dir_all(folder).unwrap();
     }
 }

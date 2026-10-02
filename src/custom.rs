@@ -369,7 +369,7 @@ pub fn preferences(
     let mut changed = false;
     egui::CollapsingHeader::new("Editor").show(ui, |ui| {
         let mut pick = None;
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label("Fuente");
             let current = if config.font.is_empty() {
                 "Predeterminada".to_string()
@@ -425,7 +425,12 @@ pub fn preferences(
                     }
                 });
             ui.data_mut(|d| d.insert_temp(id, (search, mono)));
-            if ui.button("Archivo…").clicked()
+            if ui
+                .button("Cargar fuente…")
+                .on_hover_text(
+                    "Elige una fuente TTF, OTF o una colección de fuentes para el editor.",
+                )
+                .clicked()
                 && let Some(path) = rfd::FileDialog::new()
                     .set_title("Elegir fuente")
                     .add_filter("Fuentes", &["ttf", "otf", "ttc", "otc"])
@@ -504,6 +509,9 @@ pub fn preferences(
                 .step_by(1.0)
                 .text("Esquinas redondeadas"),
         );
+        changed |= ui
+            .checkbox(&mut config.mascot, "Gatito en la barra de estado")
+            .changed();
         if !config.background.is_empty() {
             changed |= slider(
                 ui,
@@ -527,23 +535,38 @@ pub fn preferences(
             ("Fondo", &mut config.color_bg, theme.bg),
             ("Texto", &mut config.color_fg, theme.fg),
         ] {
-            ui.horizontal(|ui| {
-                let mut rgb = [current.0, current.1, current.2];
-                if ui.color_edit_button_srgb(&mut rgb).changed() {
-                    *slot = format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]);
-                    changed = true;
-                }
-                ui.label(label);
-                if !slot.is_empty() {
-                    custom = true;
-                    if ui.small_button("Quitar").clicked() {
-                        slot.clear();
+            ui.push_id(label, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    let mut rgb = [current.0, current.1, current.2];
+                    if ui.color_edit_button_srgb(&mut rgb).changed() {
+                        *slot = format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]);
                         changed = true;
                     }
-                }
+                    ui.label(label);
+                    if !slot.is_empty() {
+                        custom = true;
+                        if ui
+                            .button("Usar color del tema")
+                            .on_hover_text(format!(
+                                "Restaura el color {label} del tema seleccionado."
+                            ))
+                            .clicked()
+                        {
+                            slot.clear();
+                            changed = true;
+                        }
+                    }
+                });
             });
         }
-        if custom && ui.button("Volver a los colores del tema").clicked() {
+        if custom
+            && ui
+                .button("Restaurar todos los colores del tema")
+                .on_hover_text(
+                    "Quita todos los colores propios y vuelve a los colores del tema seleccionado.",
+                )
+                .clicked()
+        {
             for slot in [
                 &mut config.color_primary,
                 &mut config.color_secondary,

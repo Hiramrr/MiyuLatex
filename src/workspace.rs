@@ -1,7 +1,7 @@
 //! Sesión, proyectos recientes, cambios hechos por otros programas, apertura
 //! rápida y gestión de los archivos del proyecto.
 
-use super::{App, list_row_height, project_files};
+use super::{App, action, list_row_height, project_files};
 use crate::{
     editor::{Editor, catalog},
     latex,
@@ -19,7 +19,7 @@ use std::{
 /// Proyectos que recuerda el menú Archivo.
 const RECENT: usize = 10;
 
-const CODE_FILES: &[(&str, &str)] = &[
+pub(super) const CODE_FILES: &[(&str, &str)] = &[
     ("Python", "main.py"),
     ("Rust", "main.rs"),
     ("JavaScript", "main.js"),
@@ -307,7 +307,13 @@ impl App {
                 confirm = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
                 ui.label("Ubicación");
                 ui.label(draft.parent.display().to_string());
-                if ui.button("Elegir ubicación…").clicked()
+                if action(
+                    ui,
+                    "Elegir ubicación…",
+                    true,
+                    "Elige la carpeta donde se creará el proyecto.",
+                )
+                .clicked()
                     && let Some(parent) = rfd::FileDialog::new()
                         .set_title("Carpeta donde crear el proyecto")
                         .set_directory(&draft.parent)
@@ -371,13 +377,15 @@ impl App {
                     ui.colored_label(ui.visuals().error_fg_color, &draft.error);
                 }
                 ui.horizontal(|ui| {
-                    confirm |= ui
-                        .add_enabled(
-                            !draft.name.trim().is_empty(),
-                            egui::Button::new("Crear proyecto"),
-                        )
-                        .clicked();
-                    cancel |= ui.button("Cancelar").clicked();
+                    confirm |= action(
+                        ui,
+                        "Crear proyecto",
+                        !draft.name.trim().is_empty(),
+                        "Crea la carpeta y abre el proyecto. Escribe un nombre primero.",
+                    )
+                    .clicked();
+                    cancel |=
+                        action(ui, "Cancelar", true, "Cierra sin crear el proyecto.").clicked();
                 });
             });
         if !open || cancel {
@@ -459,8 +467,11 @@ impl App {
                 let path = Path::new(project);
                 let name = path.file_name().unwrap_or_default().to_string_lossy();
                 if ui
-                    .button(name.as_ref())
+                    .add_enabled(path.is_dir(), egui::Button::new(name.as_ref()))
                     .on_hover_text(project.as_str())
+                    .on_disabled_hover_text(
+                        "Esta carpeta ya no existe. Abre su nueva ubicación con Abrir proyecto.",
+                    )
                     .clicked()
                 {
                     open = Some(path.to_path_buf());
@@ -685,7 +696,7 @@ impl App {
         let height = list_row_height(ui);
         let mut toggle = None;
         let mut open = None;
-        let mut action = None;
+        let mut file_action = None;
         let mut create = None;
         // Solo se dibujan las filas visibles.
         ScrollArea::vertical().id_salt("files_list").show_rows(
@@ -758,44 +769,12 @@ impl App {
                             painter.rect_filled(body, 1.5, color);
                         }
                     } else {
-                        let extension = row
-                            .path
-                            .extension()
-                            .map(|e| e.to_string_lossy().to_lowercase())
-                            .unwrap_or_default();
-                        let color = match extension.as_str() {
-                            "tex" | "ltx" | "sty" | "cls" | "tikz" => col(theme.secondary),
-                            "bib" => col(theme.warning),
-                            "pdf" => col(theme.error),
-                            "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" => col(theme.success),
-                            "md" | "markdown" => col(theme.accent),
-                            _ => muted,
-                        };
-                        // Una hoja con la esquina doblada.
-                        let sheet = egui::Rect::from_min_max(
-                            egui::pos2(left + 1.0, middle - 6.5),
-                            egui::pos2(left + 11.0, middle + 6.5),
+                        crate::icons::file(
+                            painter,
+                            egui::pos2(left + 7.0, middle),
+                            &row.path,
+                            &theme,
                         );
-                        let fold = 3.5;
-                        painter.add(egui::Shape::closed_line(
-                            vec![
-                                sheet.left_top(),
-                                sheet.right_top() - egui::vec2(fold, 0.0),
-                                sheet.right_top() + egui::vec2(0.0, fold),
-                                sheet.right_bottom(),
-                                sheet.left_bottom(),
-                            ],
-                            egui::Stroke::new(1.2, color),
-                        ));
-                        for offset in [-1.0, 2.0] {
-                            painter.line_segment(
-                                [
-                                    egui::pos2(sheet.left() + 2.5, middle + offset),
-                                    egui::pos2(sheet.right() - 2.5, middle + offset),
-                                ],
-                                egui::Stroke::new(1.0, color.gamma_multiply(0.7)),
-                            );
-                        }
                     }
                     // Los archivos no llevan flecha: su icono va bajo el de su carpeta.
                     let text_left = left + if row.folder { 34.0 } else { 19.0 };
@@ -819,7 +798,7 @@ impl App {
                         }
                     }
                     response.context_menu(|ui| {
-                        if row.folder && ui.button("Nuevo archivo aquí…").clicked() {
+                        if row.folder && action(ui, "Crear archivo aquí…", true, "Crea un archivo dentro de esta carpeta.").clicked() {
                             create = Some(row.path.clone());
                             ui.close();
                         }
@@ -837,8 +816,14 @@ impl App {
                             ]
                         };
                         for (label, choice) in choices {
-                            if ui.button(*label).clicked() {
-                                action = Some((*choice, row.path.clone()));
+                            let help = match choice {
+                                FileAction::Rename => "Cambia el nombre del archivo. No actualiza las rutas escritas en otros documentos.",
+                                FileAction::Duplicate => "Crea una copia con otro nombre en la misma carpeta.",
+                                FileAction::Reveal => "Muestra este elemento en el gestor de archivos del sistema.",
+                                FileAction::CopyPath => "Copia la ruta completa al portapapeles.",
+                            };
+                            if action(ui, label, true, help).clicked() {
+                                file_action = Some((*choice, row.path.clone()));
                                 ui.close();
                             }
                         }
@@ -860,7 +845,7 @@ impl App {
         {
             self.message = e;
         }
-        if let Some((action, path)) = action {
+        if let Some((action, path)) = file_action {
             self.file_action(ui.ctx(), action, path);
         }
         if let Some(folder) = create {
@@ -904,7 +889,7 @@ impl App {
     fn create(&mut self, name: &str) -> Result<(), String> {
         let relative = relative(name).ok_or("Escribe un nombre dentro del proyecto, sin «..»")?;
         let relative = if relative.extension().is_none() {
-            relative.with_extension("tex")
+            relative.with_extension("txt")
         } else {
             relative
         };
@@ -1028,7 +1013,8 @@ impl App {
                         RichText::new("Los \\input y \\include que lo nombran no se actualizan.")
                             .size(12.0),
                     );
-                    confirm |= ui.button("Renombrar").clicked();
+                    confirm |= action(ui, "Renombrar archivo", relative(&name).is_some_and(|p| p.components().count() == 1), "Cambia el nombre del archivo en disco y en sus pestañas. Escribe un nombre sin carpetas.").clicked();
+                    if action(ui, "Cancelar", true, "Cierra sin cambiar el nombre.").clicked() { ui.close_kind(egui::UiKind::Window); }
                 });
             if confirm {
                 if let Err(e) = self.rename(&path, &name) {
@@ -1049,7 +1035,7 @@ impl App {
                 .show(ctx, |ui| {
                     let response = ui.add(
                         TextEdit::singleline(&mut name)
-                            .hint_text("capitulos/capitulo3.tex")
+                            .hint_text("carpeta/archivo.txt")
                             .desired_width(320.0),
                     );
                     if std::mem::take(&mut self.workspace.focus_name) {
@@ -1057,10 +1043,11 @@ impl App {
                     }
                     confirm = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
                     ui.label(
-                        RichText::new("Se crea dentro del proyecto. Sin extensión se usa .tex.")
+                        RichText::new("Se crea dentro del proyecto. Escribe la extensión del formato que quieras. Sin extensión se usa .txt.")
                             .size(12.0),
                     );
-                    confirm |= ui.button("Crear").clicked();
+                    confirm |= action(ui, "Crear archivo", relative(&name).is_some(), "Crea y abre el archivo. Escribe un nombre dentro del proyecto.").clicked();
+                    if action(ui, "Cancelar", true, "Cierra sin crear un archivo.").clicked() { ui.close_kind(egui::UiKind::Window); }
                 });
             if confirm {
                 if let Err(e) = self.create(&name) {
@@ -1086,16 +1073,16 @@ impl App {
                     self.documents[index].editor.title()
                 ));
                 ui.label("Otro programa modificó el archivo y aquí hay cambios sin guardar.");
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     if ui
-                        .button("Recargar del disco")
+                        .button("Cargar versión del disco")
                         .on_hover_text("Tus cambios se pueden recuperar con Deshacer")
                         .clicked()
                     {
                         action = 1;
                     }
                     if ui
-                        .button("Conservar mi versión")
+                        .button("Conservar cambios del editor")
                         .on_hover_text("Al guardar se sobrescribe la versión del disco")
                         .clicked()
                     {
@@ -1298,9 +1285,9 @@ mod tests {
         // Archivos nuevos, renombrados y duplicados dentro del proyecto.
         assert!(app.create("../fuera.tex").is_err());
         app.create("cap/dos").unwrap();
-        let two = folder.join("cap/dos.tex");
+        let two = folder.join("cap/dos.txt");
         assert_eq!(app.editor().path.as_ref(), Some(&two));
-        assert!(app.create("cap/dos.tex").is_err());
+        assert!(app.create("cap/dos.txt").is_err());
         assert!(app.rename(&two, "uno.tex").is_err());
         assert!(app.rename(&two, "otra/tres.tex").is_err());
         app.rename(&two, "tres.tex").unwrap();

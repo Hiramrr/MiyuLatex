@@ -23,6 +23,8 @@ use crate::{
 
 #[path = "code.rs"]
 pub mod code;
+#[path = "complete.rs"]
+mod complete;
 
 #[derive(Deserialize)]
 pub struct Command {
@@ -139,6 +141,8 @@ pub struct Editor {
     bracket: Cell<Option<(u64, Pos, Option<(Pos, Pos)>)>>,
     /// Tras aceptar una palabra no se sugiere nada hasta que cambie algo.
     quiet: Option<(u64, Pos)>,
+    /// Se pidieron sugerencias a mano en esta revisión y este cursor.
+    forced: Option<(u64, Pos)>,
 }
 
 pub fn byte_col(line: &str, col: usize) -> usize {
@@ -180,6 +184,7 @@ impl Editor {
             typing: None,
             bracket: Cell::new(None),
             quiet: None,
+            forced: None,
         };
         e.refresh();
         e
@@ -426,6 +431,12 @@ impl Editor {
         self.splice(a, b, text);
         self.typing = typed.map(|_| (Pos::new(a.row, a.col + 1), Instant::now()));
     }
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
     pub fn undo(&mut self, redo: bool) {
         if !self.format.editable() {
             return;
@@ -600,6 +611,7 @@ impl Editor {
     }
     pub fn find_next(&mut self, backwards: bool) {
         let current = self.selection().0;
+        let selected = self.matches.contains(&self.selection());
         let found = if backwards {
             self.matches
                 .iter()
@@ -609,7 +621,7 @@ impl Editor {
         } else {
             self.matches
                 .iter()
-                .find(|(a, _)| *a > current)
+                .find(|(a, _)| *a > current || (!selected && *a == current))
                 .or(self.matches.first())
         };
         if let Some(&(a, b)) = found {
@@ -940,7 +952,7 @@ impl Editor {
         self.anchor.is_none_or(|anchor| anchor == self.cursor)
             && match self.format {
                 Format::Latex => line[..byte_col(line, self.cursor.col)].contains('\\'),
-                // En el código se completan las palabras del propio documento.
+                // En el código, las palabras del documento y las del lenguaje.
                 Format::Code(_) => self.word_prefix().is_some(),
                 _ => false,
             }
@@ -1096,8 +1108,12 @@ impl Editor {
         };
         let a = Pos::new(self.cursor.row, c.start);
         let mut b = self.cursor;
-        if c.kind == "word" {
-            self.replace(a, b, &c.insert);
+        if c.kind == "word" || c.kind == "snippet" {
+            if c.kind == "word" {
+                self.replace(a, b, &c.insert);
+            } else {
+                self.snippet(&c.insert, a, b);
+            }
             self.quiet = Some((self.revision, self.cursor));
             return;
         }

@@ -16,6 +16,10 @@ pub struct Config {
     pub autosave: bool,
     pub show_sidebar: bool,
     pub show_preview: bool,
+    /// El panel de archivos va a la derecha en vez de a la izquierda.
+    pub sidebar_right: bool,
+    /// La vista previa va a la izquierda en vez de a la derecha.
+    pub preview_left: bool,
     pub soft_wrap: bool,
     pub invert_preview: bool,
     pub background: String,
@@ -38,6 +42,8 @@ pub struct Config {
     pub auto_pairs: bool,
     pub completions: bool,
     pub corner_radius: f64,
+    /// El gatito que vive sobre la barra de estado.
+    pub mascot: bool,
     pub autocompile_delay: f64,
     pub color_primary: String,
     pub color_secondary: String,
@@ -66,6 +72,8 @@ impl Default for Config {
             autosave: true,
             show_sidebar: true,
             show_preview: true,
+            sidebar_right: false,
+            preview_left: false,
             soft_wrap: true,
             invert_preview: false,
             background: String::new(),
@@ -87,6 +95,7 @@ impl Default for Config {
             auto_pairs: true,
             completions: true,
             corner_radius: 0.0,
+            mascot: true,
             autocompile_delay: 1.2,
             color_primary: String::new(),
             color_secondary: String::new(),

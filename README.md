@@ -1,7 +1,7 @@
 # MiyuLaTeX
 
 Editor de LaTeX, Markdown y código escrito en Rust. Abre una ventana gráfica
-con egui, texto monoespaciado, paneles rectangulares y bordes finos. Incluye
+con egui, controles con la fuente del sistema, código monoespaciado y bordes finos. Incluye
 compilación LaTeX, vista previa de Markdown y un visor de PDF e imágenes.
 
 ![Ventana de MiyuLaTeX](docs/captura-rust.png)
@@ -46,9 +46,15 @@ citas y referencias sin resolver, con el archivo y la línea donde aparecen.
 
 ## Uso
 
-Abre una carpeta de proyecto o un archivo desde Archivo. También puedes
-arrastrarlos a la ventana. Los archivos y el esquema están a la izquierda,
-las pestañas del editor en el centro y la vista previa a la derecha. Los
+Nuevo documento abre un archivo sin guardar. Nuevo proyecto crea una carpeta,
+y Abrir proyecto permite elegir una carpeta existente. Abrir archivo acepta
+texto, código, PDF e imágenes. También puedes arrastrarlos a la ventana.
+Los botones explican su acción al pasar el cursor. Las acciones que requieren
+un documento editable, un PDF o una compilación en curso se desactivan cuando
+no están disponibles. Los archivos y el esquema están a la izquierda,
+las pestañas del editor en el centro y la vista previa a la derecha. El menú Ver
+permite ocultar cada panel o pasarlo al otro lado de la ventana. En ventanas
+estrechas, el panel lateral se abre en una ventana para conservar su acceso. Los
 problemas de compilación abren el archivo en la línea correspondiente.
 
 Nuevo proyecto, en la barra de herramientas o en Archivo, crea una carpeta
@@ -73,16 +79,21 @@ resaltado según el nuevo nombre. Se conservan los saltos de línea de Windows.
 
 El editor detecta la sangría del archivo y la usa al pulsar Tab o Enter.
 Mayús+Tab quita un nivel. Las guías de sangría se activan en Preferencias.
-El esquema lista funciones, clases y tipos, y el completado ofrece palabras
-del documento y del lenguaje. Las flechas eligen una sugerencia, Tab la
-inserta y Esc cierra la lista. Copiar o cortar sin selección toma la línea
+El esquema lista funciones, clases y tipos. El completado es local y depende
+del lenguaje: ofrece las palabras del documento (las más cercanas primero),
+las palabras clave y la biblioteca que traen las gramáticas del resaltado, los
+miembros habituales tras un punto y plantillas como `for`, `main` o `class`.
+Las flechas eligen una sugerencia, Tab la inserta y Esc cierra la lista;
+Ctrl+Espacio la abre sin haber escrito nada. Copiar o cortar sin selección toma la línea
 entera. Deshacer agrupa las letras escritas seguidas.
 
 Buscar resalta las coincidencias y muestra la posición actual. Enter y
 Mayús+Enter avanzan o retroceden desde el campo de búsqueda, y Esc lo cierra.
 `Aa` distingue mayúsculas, `ab` busca palabras completas y `.*` permite
 expresiones regulares. Sin `Aa`, escribir una mayúscula también hace la
-búsqueda exacta. Reemplazar cambia la coincidencia seleccionada y avanza.
+búsqueda exacta. Reemplazar coincidencia cambia solo la coincidencia seleccionada y avanza.
+Reemplazar todas cambia todas las coincidencias del documento activo y permite
+deshacerlas en un paso. Ambos botones se desactivan si no hay coincidencias.
 
 Los PDF se abren en pestañas de solo lectura. Las páginas van seguidas en una
 columna que se recorre con la rueda o el trackpad. El zoom se ajusta con los
@@ -92,8 +103,9 @@ cuando se ve. Al recompilar se conserva la posición. Cada pestaña conserva su
 página y su zoom. También puedes ver PNG, JPEG, WebP, GIF y BMP. La compilación automática
 solo se aplica a LaTeX. PDF e imágenes no pasan por el guardado de texto.
 
-El diálogo Nuevo permite crear Markdown, texto, código Python o Rust, además
-de las plantillas LaTeX. Abre y guarda otros lenguajes con su extensión.
+El diálogo Nuevo documento permite crear LaTeX, bibliografía, Markdown, texto,
+Python, Rust, JavaScript, TypeScript, C, C++ y Go, además de las plantillas LaTeX.
+Abre y guarda otros lenguajes con su extensión.
 
 | Tecla en macOS | Acción |
 | --- | --- |
@@ -145,11 +157,14 @@ otros fuentes a la carpeta del proyecto.
 
 El panel Referencias lista las etiquetas y las citas de todo el proyecto para
 insertarlas con `\ref` o `\cite`. Insertar tiene asistentes de tabla y figura,
-además de los entornos del catálogo. Buscar en el proyecto recorre todos los
-fuentes y abre cada resultado en su línea.
+además de los entornos del catálogo. Buscar en el proyecto recorre los archivos de texto e incluye los cambios
+abiertos sin guardar. Cada resultado abre el archivo en su línea.
 
-El menú LaTeX permite detener la compilación, recompilar desde cero, compilar
-al dejar de escribir y guardar automáticamente. Contar palabras usa `texcount`
+El menú LaTeX permite detener la compilación, recompilar desde cero, limpiar
+archivos auxiliares, compilar al dejar de escribir y guardar automáticamente.
+Detener compilación sigue disponible al cambiar de pestaña. Configurar proyecto
+LaTeX abre una ventana dedicada al archivo principal y al motor de esa carpeta.
+Preferencias conserva los ajustes generales del editor y la apariencia. Contar palabras usa `texcount`
 si está instalado y, si no, una estimación propia.
 
 Mostrar esta línea en el PDF (`Cmd+Shift+J`) lleva del código a la página y
@@ -157,8 +172,8 @@ resalta la línea. Un doble clic o `Cmd`+clic en el PDF abre el archivo y la
 línea de origen. Miyu lee el `.synctex.gz` que deja la compilación, sin el
 programa `synctex`, así que funciona con Tectonic solo.
 
-Cada guardado deja una versión en `~/.config/miyulatex/history`. Historial del
-archivo muestra las últimas 100 y restaura cualquiera en el editor.
+Cada guardado deja una versión en `~/.config/miyulatex/history`. Historial del archivo LaTeX, en Archivo, muestra las últimas 100 y restaura
+cualquiera en el editor.
 
 ## Sesión y archivos
 
@@ -170,8 +185,9 @@ Abrir rápido (`Cmd+Shift+O`) busca entre los archivos del proyecto por
 cualquier parte del nombre o por sus letras en orden.
 
 Archivos muestra el proyecto como un árbol de carpetas que se pliegan con un
-clic. El filtro deja solo las carpetas con coincidencias. Nuevo crea un archivo
-dentro del proyecto. El clic derecho sobre un archivo permite renombrarlo,
+clic. El filtro deja solo las carpetas con coincidencias. Crear archivo crea un archivo dentro del proyecto. Puedes elegir cualquier
+formato por su extensión. Sin extensión, crea texto con `.txt`. Añadir archivos
+copia archivos existentes y Actualizar lista vuelve a leer la carpeta. El clic derecho sobre un archivo permite renombrarlo,
 duplicarlo, mostrarlo en su carpeta y copiar su ruta. Sobre una carpeta, crea
 un archivo dentro de ella.
 
@@ -204,6 +220,11 @@ esquinas. Los colores propios sustituyen el primario, el secundario, el
 acento, el fondo y el texto del tema elegido. Con una foto de fondo puedes
 ajustar el tamaño del punto y la sombra bajo el texto, que mantiene legible
 el código sobre la foto en temas claros y oscuros.
+
+Sobre la barra de estado vive un gatito de píxeles: pasea, parpadea, mueve
+la cola, se duerme tras un minuto sin actividad y salta cuando la compilación
+sale bien o le haces clic. Se oculta con clic derecho sobre él, en Ver o en
+Apariencia.
 
 ## Fondo tramado
 
