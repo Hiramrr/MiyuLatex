@@ -10,10 +10,10 @@ compilación LaTeX, vista previa de Markdown y un visor de PDF e imágenes.
 
 ```sh
 cargo run --release
-cargo run --release -- articulo.tex
+cargo run --release -- examples/articulo.tex
 cargo run --release -- README.md
 cargo run --release -- src/main.rs
-cargo run --release -- articulo.pdf
+cargo run --release -- examples/articulo.pdf
 ```
 
 Estos comandos abren una ventana. También puedes crear la app macOS y abrirla
