@@ -134,7 +134,9 @@ pub fn faces(path: &Path) -> io::Result<Vec<Face>> {
         let directory = read(start + 12, count * 16)?;
         let table = |tag: &[u8; 4]| {
             directory
-                .chunks_exact(16)
+                .as_chunks::<16>()
+                .0
+                .iter()
                 .find(|record| &record[..4] == tag)
                 .map(|record| (long(record, 8), long(record, 12) as usize))
         };
@@ -146,7 +148,7 @@ pub fn faces(path: &Path) -> io::Result<Vec<Face>> {
         // Familia, estilo y sus variantes tipográficas (16 y 17), con el mejor idioma visto.
         let mut best: [(u8, String); 4] = Default::default();
         let records = names.get(6..6 + short(&names, 2) * 12).unwrap_or_default();
-        for record in records.chunks_exact(12) {
+        for record in records.as_chunks::<12>().0 {
             let slot = match short(record, 6) {
                 1 => 0,
                 2 => 1,
@@ -162,7 +164,9 @@ pub fn faces(path: &Path) -> io::Result<Vec<Face>> {
             let (rank, text) = match platform {
                 0 | 3 => {
                     let units: Vec<_> = bytes
-                        .chunks_exact(2)
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
                         .map(|b| u16::from_be_bytes([b[0], b[1]]))
                         .collect();
                     (

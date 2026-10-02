@@ -41,7 +41,7 @@ fn raster(page: &Page, scale: f32, invert: bool) -> (u32, u32, Vec<u8>) {
     );
     let mut data = pixmap.data_as_u8_slice().to_vec();
     if invert {
-        for p in data.chunks_exact_mut(4) {
+        for p in data.as_chunks_mut::<4>().0 {
             p[0] = 255 - p[0];
             p[1] = 255 - p[1];
             p[2] = 255 - p[2];
