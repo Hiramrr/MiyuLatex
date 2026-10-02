@@ -44,6 +44,10 @@ pub struct Config {
     pub corner_radius: f64,
     /// El gatito que vive sobre la barra de estado.
     pub mascot: bool,
+    /// El cangrejito que acompaña al gatito.
+    pub mascot_friend: bool,
+    /// El schnauzer que acompaña al gatito.
+    pub mascot_dog: bool,
     pub autocompile_delay: f64,
     pub color_primary: String,
     pub color_secondary: String,
@@ -96,6 +100,8 @@ impl Default for Config {
             completions: true,
             corner_radius: 0.0,
             mascot: true,
+            mascot_friend: true,
+            mascot_dog: true,
             autocompile_delay: 1.2,
             color_primary: String::new(),
             color_secondary: String::new(),

@@ -1526,7 +1526,9 @@ impl App {
                     changed |= ui.checkbox(&mut self.config.show_preview, "Vista previa").on_hover_text("Muestra el PDF de LaTeX o la vista previa de Markdown. F3.").changed();
                     changed |= ui.checkbox(&mut self.config.soft_wrap, "Ajustar líneas al ancho del editor").changed();
                     ui.checkbox(&mut self.panel, "Problemas y registro de compilación").on_hover_text("Muestra u oculta los resultados de la última compilación. F4.");
-                    changed |= ui.checkbox(&mut self.config.mascot, "Gatito en la barra de estado").on_hover_text("Muestra u oculta la mascota. Se duerme si no escribes y salta cuando la compilación sale bien.").changed();
+                    changed |= ui.checkbox(&mut self.config.mascot, "Gatito en la barra de estado").on_hover_text("Muestra u oculta la mascota. Teclea en su portátil mientras escribes, espera la compilación y se duerme si no hay actividad.").changed();
+                    changed |= ui.add_enabled(self.config.mascot, egui::Checkbox::new(&mut self.config.mascot_friend, "Cangrejito amigo del gatito")).on_hover_text("Un cangrejito que pasea por la barra de estado y va a saludar al gatito.").changed();
+                    changed |= ui.add_enabled(self.config.mascot, egui::Checkbox::new(&mut self.config.mascot_dog, "Schnauzer amigo del gatito")).on_hover_text("Un schnauzer que pasea por la barra de estado, menea la cola y ladra si la compilación falla.").changed();
                     ui.separator();
                     ui.menu_button("Posición del panel de archivos", |ui| {
                         changed |= ui.radio_value(&mut self.config.sidebar_right, false, "Izquierda").changed();
@@ -3773,8 +3775,12 @@ impl App {
         if self.config.mascot {
             let busy = self.compile_rx.is_some();
             let ok = self.result.as_ref().is_some_and(|r| r.ok);
-            if self.mascot.show(ui, floor, &self.theme, busy, ok) {
-                self.config.mascot = false;
+            let shown = [self.config.mascot_friend, self.config.mascot_dog];
+            let mut friends = shown;
+            let hide = self.mascot.show(ui, floor, &self.theme, busy, ok, &mut friends);
+            if hide || friends != shown {
+                self.config.mascot = !hide;
+                [self.config.mascot_friend, self.config.mascot_dog] = friends;
                 self.preferences_changed(&ctx);
             }
         }

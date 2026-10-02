@@ -512,6 +512,14 @@ pub fn preferences(
         changed |= ui
             .checkbox(&mut config.mascot, "Gatito en la barra de estado")
             .changed();
+        ui.add_enabled_ui(config.mascot, |ui| {
+            changed |= ui
+                .checkbox(&mut config.mascot_friend, "Cangrejito amigo del gatito")
+                .changed();
+            changed |= ui
+                .checkbox(&mut config.mascot_dog, "Schnauzer amigo del gatito")
+                .changed();
+        });
         if !config.background.is_empty() {
             changed |= slider(
                 ui,

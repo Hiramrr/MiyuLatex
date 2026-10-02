@@ -221,10 +221,14 @@ acento, el fondo y el texto del tema elegido. Con una foto de fondo puedes
 ajustar el tamaño del punto y la sombra bajo el texto, que mantiene legible
 el código sobre la foto en temas claros y oscuros.
 
-Sobre la barra de estado vive un gatito de píxeles: pasea, parpadea, mueve
-la cola, se duerme tras un minuto sin actividad y salta cuando la compilación
-sale bien o le haces clic. Se oculta con clic derecho sobre él, en Ver o en
-Apariencia.
+Sobre la barra de estado vive un gatito de píxeles. Mientras escribes saca
+un portátil y teclea contigo; durante la compilación espera con unos puntos
+sobre la cabeza, salta si sale bien y se asusta si falla. A ratos pasea, se
+lame una pata, juega con un ovillo o se estira, y tras un minuto sin
+actividad se duerme. Lo acompañan un cangrejito que chasquea las pinzas y
+un schnauzer que menea la cola y ladra si la compilación falla: pasean por
+su cuenta y de vez en cuando van a saludarlo, y entonces saltan juntos.
+Cada uno se oculta con clic derecho sobre él, en Ver o en Apariencia.
 
 ## Fondo tramado
 
