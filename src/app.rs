@@ -2,10 +2,11 @@ use crate::{
     backdrop::{self, Backdrop},
     compiler::{self, CompileResult},
     config::{self, Config},
-    editor::{Editor, catalog},
+    editor::{Editor, catalog, code::Indent},
     format::Format,
     latex::{self, Source, Target},
     layout::{self, Layout, Look},
+    marks::{self, Marks},
     preview::Preview,
     theme::{self, Theme, col},
 };
@@ -28,6 +29,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[path = "workspace.rs"]
+mod workspace;
+
 /// Buscar el archivo principal lee disco: se recuerda mientras no cambie
 /// aquello del texto de lo que depende.
 struct RootCache {
@@ -41,7 +45,6 @@ struct Document {
     editor: Editor,
     layout: Layout,
     pdf: Option<Preview>,
-    texture: Option<TextureHandle>,
 }
 /// Clave, celdas del tramado, puntos por celda y tamaño de ventana.
 type BackgroundFrame = (String, egui::ColorImage, f32, egui::Vec2);
@@ -98,7 +101,6 @@ pub struct App {
     background_layout: (f32, egui::Vec2),
     background_job: Option<Receiver<BackgroundFrame>>,
     preview: Preview,
-    pdf_texture: Option<TextureHandle>,
     markdown_cache: CommonMarkCache,
     compile_rx: Option<Receiver<Result<CompileResult, String>>>,
     cancel: Arc<AtomicBool>,
@@ -123,6 +125,8 @@ pub struct App {
     sync_cursor: bool,
     message: String,
     edited_at: Option<Instant>,
+    workspace: workspace::State,
+    spell: crate::spell::Speller,
 }
 
 pub fn project_files(root: &Path) -> Vec<PathBuf> {
@@ -165,6 +169,16 @@ pub fn project_files(root: &Path) -> Vec<PathBuf> {
 impl App {
     pub fn new(target: Option<PathBuf>, ctx: &egui::Context) -> Result<Self, String> {
         egui_extras::install_image_loaders(ctx);
+        let config = Config::load();
+        // Sin argumentos se vuelve a la última sesión; `miyu .` abre la carpeta actual.
+        let session = target.is_none()
+            && config.restore_session
+            && Path::new(&config.session_project).is_dir();
+        let target = if session {
+            Some(PathBuf::from(&config.session_project))
+        } else {
+            target
+        };
         let target = target.unwrap_or_else(|| {
             let bundled = std::env::current_exe()
                 .is_ok_and(|p| p.to_string_lossy().contains(".app/Contents/"));
@@ -187,7 +201,6 @@ impl App {
             target.parent().unwrap_or(Path::new(".")).into()
         };
         let project = project.canonicalize().map_err(|e| e.to_string())?;
-        let config = Config::load();
         let mut backdrop = Backdrop::default();
         let mut message = String::new();
         if !config.background.is_empty()
@@ -234,7 +247,6 @@ impl App {
             background_key: String::new(),
             background_layout: (1.0, egui::Vec2::ZERO),
             background_job: None,
-            pdf_texture: None,
             markdown_cache: CommonMarkCache::default(),
             compile_rx: None,
             cancel: Arc::new(AtomicBool::new(false)),
@@ -259,21 +271,15 @@ impl App {
             sync_cursor: true,
             message,
             edited_at: None,
+            workspace: workspace::State::default(),
+            spell: crate::spell::Speller::default(),
         };
-        if target.is_file() {
+        if session && app.restore_session() {
+            // Las pestañas de la última vez ya están abiertas.
+        } else if target.is_file() {
             app.open(&target)?;
         } else {
-            let first = [
-                "main.tex",
-                "principal.tex",
-                "tesis.tex",
-                "README.md",
-                "readme.md",
-            ]
-            .iter()
-            .map(|s| app.project.join(s))
-            .find(|p| p.is_file());
-            if let Some(path) = first {
+            if let Some(path) = app.project_entry() {
                 app.open(&path)?;
             } else {
                 app.new_document(0);
@@ -389,7 +395,11 @@ impl App {
             self.editor_mut().completions.clear();
             return;
         }
-        let sources = self.completion_sources();
+        let sources = if self.editor().format == Format::Latex {
+            self.completion_sources()
+        } else {
+            Vec::new()
+        };
         self.editor_mut().update_completion_from(&sources);
     }
     fn project_changed(&mut self) {
@@ -722,7 +732,6 @@ impl App {
             editor,
             layout: Layout::default(),
             pdf: None,
-            texture: None,
         });
         self.activate(self.documents.len() - 1);
     }
@@ -755,7 +764,6 @@ impl App {
             }
         } else {
             self.preview = Preview::new(self.config.invert_preview);
-            self.pdf_texture = None;
         }
         self.pdf_marker = None;
     }
@@ -836,10 +844,7 @@ impl App {
             .set_directory(&self.project)
             .pick_folder()
         {
-            self.project = path;
-            self.project_settings = latex::Project::load(&self.project);
-            self.files = project_files(&self.project);
-            self.refresh_sources();
+            self.open_project(path);
         }
     }
     fn save_document(&mut self, index: usize, save_as: bool) -> bool {
@@ -906,9 +911,6 @@ impl App {
         true
     }
     fn load_pdf(&mut self, path: &Path) {
-        if self.preview.path.as_deref() != Some(path) {
-            self.pdf_texture = None;
-        }
         if let Err(e) = self.preview.load(path) {
             self.message = e;
         }
@@ -995,8 +997,6 @@ impl App {
                 Ok(ToolResult::Message(message)) => self.message = message,
                 Ok(ToolResult::Words(count)) => self.word_count = Some(count),
                 Ok(ToolResult::Forward(page, x, y)) => {
-                    self.pdf_mut().page = page;
-                    self.pdf_mut().request();
                     self.pdf_marker = Some((page, x, y));
                     self.scroll_pdf_marker = true;
                 }
@@ -1103,10 +1103,10 @@ impl App {
                 Err(e) => self.message = e,
             }
         }
-        poll_pdf(&mut self.preview, &mut self.pdf_texture, ctx);
+        self.preview.poll(ctx);
         for doc in &mut self.documents {
             if let Some(pdf) = &mut doc.pdf {
-                poll_pdf(pdf, &mut doc.texture, ctx);
+                pdf.poll(ctx);
             }
         }
         if self.config.autocompile
@@ -1268,7 +1268,20 @@ impl App {
     }
     fn shortcuts(&mut self, ctx: &egui::Context) {
         let cmd = Modifiers::COMMAND;
-        if Self::shortcut(ctx, cmd, Key::N) {
+        // Los atajos con Mayús van antes: sin ella coinciden también los simples.
+        if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::F) {
+            self.project_search = true;
+            self.search_project();
+        }
+        if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::O) {
+            self.open_quick();
+        }
+        if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::J) {
+            self.sync_to_pdf(ctx);
+        }
+        if Self::shortcut(ctx, cmd | Modifiers::SHIFT, Key::N) {
+            self.new_project();
+        } else if Self::shortcut(ctx, cmd, Key::N) {
             self.templates = true;
         }
         if Self::shortcut(ctx, cmd, Key::O) {
@@ -1289,16 +1302,13 @@ impl App {
             self.compile(false, ctx);
         }
         if Self::shortcut(ctx, cmd, Key::F) && self.editor().format.editable() {
+            let selected = self.editor().selected();
+            if !selected.is_empty() && !selected.contains('\n') {
+                self.query = selected;
+            }
             self.find = true;
             self.focus_find = true;
             self.editor_mut().completions.clear();
-        }
-        if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::F) {
-            self.project_search = true;
-            self.search_project();
-        }
-        if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::J) {
-            self.sync_to_pdf(ctx);
         }
         if Self::shortcut(ctx, Modifiers::CTRL, Key::Space) && self.config.completions {
             self.update_completion();
@@ -1375,6 +1385,10 @@ impl App {
             .show(ui, |ui| {
                 egui::MenuBar::new().ui(ui, |ui| {
                     ui.menu_button("Archivo", |ui| {
+                        if ui.button("Nuevo proyecto…").clicked() {
+                            self.new_project();
+                            ui.close();
+                        }
                         if ui.button("Nuevo documento…").clicked() {
                             self.templates = true;
                             ui.close();
@@ -1385,6 +1399,15 @@ impl App {
                         }
                         if ui.button("Abrir carpeta…").clicked() {
                             self.folder_dialog();
+                            ui.close();
+                        }
+                        self.recent_menu(ui);
+                        if ui.button("Abrir rápido…").clicked() {
+                            self.open_quick();
+                            ui.close();
+                        }
+                        if ui.button("Nuevo archivo del proyecto…").clicked() {
+                            self.new_file();
                             ui.close();
                         }
                         if ui.button("Añadir archivos al proyecto…").clicked() {
@@ -1669,6 +1692,9 @@ impl App {
                 });
                 ui.separator();
                 ui.horizontal_wrapped(|ui| {
+                    if ui.button("Nuevo proyecto").clicked() {
+                        self.new_project();
+                    }
                     if ui.button("Nuevo").clicked() {
                         self.templates = true;
                     }
@@ -1903,16 +1929,27 @@ impl App {
                         .color(col(self.theme.muted())),
                     )
                     .on_hover_text(self.project.display().to_string());
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         if ui.small_button("Carpeta…").clicked() {
                             self.folder_dialog();
                         }
-                        if ui.small_button("Actualizar").clicked() {
-                            self.files = project_files(&self.project);
-                            self.refresh_sources();
+                        if ui
+                            .small_button("Nuevo…")
+                            .on_hover_text("Crear un archivo en el proyecto")
+                            .clicked()
+                        {
+                            self.new_file();
                         }
                         if ui.small_button("Añadir…").clicked() {
                             self.add_files();
+                        }
+                        if ui
+                            .small_button("Recargar")
+                            .on_hover_text("Volver a leer la carpeta del proyecto")
+                            .clicked()
+                        {
+                            self.files = project_files(&self.project);
+                            self.refresh_sources();
                         }
                     });
                     ui.add(
@@ -1920,53 +1957,7 @@ impl App {
                             .hint_text("Filtrar archivos")
                             .desired_width(f32::INFINITY),
                     );
-                    let query = self.file_query.to_lowercase();
-                    let files: Vec<&PathBuf> = self
-                        .files
-                        .iter()
-                        .filter(|p| {
-                            query.is_empty()
-                                || p.strip_prefix(&self.project)
-                                    .unwrap_or(p)
-                                    .to_string_lossy()
-                                    .to_lowercase()
-                                    .contains(&query)
-                        })
-                        .collect();
-                    if files.is_empty() {
-                        ui.label("No hay archivos. Abre una carpeta o crea un documento.");
-                    }
-                    let active = self.editor().path.as_ref();
-                    let mut open = None;
-                    // Solo se dibujan las filas visibles.
-                    ScrollArea::vertical().id_salt("files_list").show_rows(
-                        ui,
-                        list_row_height(ui),
-                        files.len(),
-                        |ui, rows| {
-                            // Filas de una línea: todas miden lo mismo.
-                            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-                            for &file in &files[rows] {
-                                let label = file
-                                    .strip_prefix(&self.project)
-                                    .unwrap_or(file)
-                                    .to_string_lossy();
-                                let selected = active.is_some_and(|p| {
-                                    p == file
-                                        || (p.file_name() == file.file_name()
-                                            && file.canonicalize().is_ok_and(|f| f == *p))
-                                });
-                                if ui.selectable_label(selected, label.as_ref()).clicked() {
-                                    open = Some(file.clone());
-                                }
-                            }
-                        },
-                    );
-                    if let Some(file) = open
-                        && let Err(e) = self.open(&file)
-                    {
-                        self.message = e;
-                    }
+                    self.file_tree(ui);
                 }
             });
     }
@@ -2007,8 +1998,7 @@ impl App {
                 .on_hover_text("Ir a página")
                 .changed()
             {
-                self.pdf_mut().page = page.saturating_sub(1);
-                self.pdf_mut().request();
+                self.pdf_mut().go_to(page.saturating_sub(1));
             }
             ui.label(format!("/ {count}"));
             if ui
@@ -2026,13 +2016,20 @@ impl App {
             if ui.small_button("−").on_hover_text("Reducir zoom").clicked() {
                 self.pdf_mut().change_zoom(-1);
             }
-            ui.label(format!("{} %", self.pdf().zoom));
+            ui.label(format!("{:.0} %", self.pdf().zoom));
             if ui
                 .small_button("+")
                 .on_hover_text("Aumentar zoom")
                 .clicked()
             {
                 self.pdf_mut().change_zoom(1);
+            }
+            if ui
+                .small_button("Ajustar")
+                .on_hover_text("Ajustar la página al ancho del panel")
+                .clicked()
+            {
+                self.pdf_mut().zoom = 100.0;
             }
             if ui.small_button("Visor del sistema").clicked() {
                 self.open_pdf();
@@ -2047,6 +2044,9 @@ impl App {
                 .add_enabled(
                     self.tool_rx.is_none() && self.root().is_some(),
                     egui::Button::new("Código → PDF"),
+                )
+                .on_hover_text(
+                    "Muestra en el PDF la línea del cursor. Doble clic o Cmd+clic en el PDF abre su código.",
                 )
                 .clicked()
             {
@@ -2065,61 +2065,16 @@ impl App {
         if !self.pdf().error.is_empty() {
             ui.colored_label(col(self.theme.error), &self.pdf().error);
         }
-        let texture = if self.documents[self.active].pdf.is_some() {
-            self.documents[self.active].texture.clone()
-        } else {
-            self.pdf_texture.clone()
-        };
-        let mut sync = None;
-        ScrollArea::both()
-            .id_salt(self.documents[self.active].id.with("pdf_scroll"))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                if let Some(texture) = &texture {
-                    let width = ui.available_width().max(1.0) * self.pdf().zoom as f32 / 100.0;
-                    let size = texture.size_vec2() * (width / texture.size_vec2().x);
-                    let response = ui
-                        .add(egui::Image::new((texture.id(), size)).sense(egui::Sense::click()))
-                        .on_hover_text("Doble clic para abrir la línea de origen con SyncTeX");
-                    if response.double_clicked()
-                        && self.tool_rx.is_none()
-                        && let Some(position) = response.interact_pointer_pos()
-                        && let Some((width, height)) = self.pdf().page_size()
-                        && let Some(pdf) = self.pdf().path.clone()
-                    {
-                        let fraction = (position - response.rect.min) / response.rect.size();
-                        sync = Some((
-                            pdf,
-                            self.pdf().page,
-                            fraction.x * width,
-                            fraction.y * height,
-                        ));
-                    }
-                    if let Some((page, x, y)) = self.pdf_marker
-                        && page == self.pdf().page
-                        && !self.pdf().loading
-                        && let Some((width, height)) = self.pdf().page_size()
-                    {
-                        let position = response.rect.min
-                            + egui::vec2(x / width, y / height) * response.rect.size();
-                        let marker =
-                            egui::Rect::from_center_size(position, egui::vec2(100.0, 16.0));
-                        ui.painter().rect_stroke(
-                            marker,
-                            0.0,
-                            Stroke::new(2.0, col(self.theme.primary)),
-                            egui::StrokeKind::Inside,
-                        );
-                        if self.scroll_pdf_marker {
-                            ui.scroll_to_rect(marker, None);
-                            self.scroll_pdf_marker = false;
-                        }
-                    }
-                } else if !self.pdf().loading && self.pdf().error.is_empty() {
-                    ui.label("Compila el documento para ver el PDF.");
-                }
-            });
-        if let Some((pdf, page, x, y)) = sync {
+        let id = self.documents[self.active].id.with("pdf_scroll");
+        let accent = col(self.theme.primary);
+        let marker = self.pdf_marker;
+        let mut reveal = self.scroll_pdf_marker;
+        let clicked = self.pdf_mut().show(ui, id, marker, &mut reveal, accent);
+        self.scroll_pdf_marker = reveal;
+        if let Some((page, x, y)) = clicked
+            && self.tool_rx.is_none()
+            && let Some(pdf) = self.pdf().path.clone()
+        {
             self.start_tool(ui.ctx(), move || {
                 compiler::sync_back(&pdf, page, x, y)
                     .map(|(path, line)| ToolResult::Back(path, line))
@@ -2308,6 +2263,56 @@ impl App {
             self.editor_mut().rewrite_lines(true, false);
             changed = true;
         }
+        // Mueven el cursor o la selección sin editar el texto.
+        let mut moved = false;
+        let shifted = Modifiers::COMMAND | Modifiers::SHIFT;
+        if Self::shortcut(ctx, Modifiers::ALT | Modifiers::SHIFT, Key::ArrowDown)
+            || Self::shortcut(ctx, shifted, Key::D)
+        {
+            self.editor_mut().duplicate_lines();
+            changed = true;
+        } else if Self::shortcut(ctx, Modifiers::COMMAND, Key::D) {
+            moved |= self.editor_mut().select_next();
+        }
+        if Self::shortcut(ctx, Modifiers::ALT, Key::ArrowUp) {
+            changed |= self.editor_mut().move_lines(true);
+        }
+        if Self::shortcut(ctx, Modifiers::ALT, Key::ArrowDown) {
+            changed |= self.editor_mut().move_lines(false);
+        }
+        if Self::shortcut(ctx, shifted, Key::K) {
+            self.editor_mut().delete_lines();
+            changed = true;
+        }
+        if Self::shortcut(ctx, Modifiers::COMMAND, Key::L) {
+            self.editor_mut().select_line();
+            moved = true;
+        }
+        if Self::shortcut(ctx, shifted, Key::Enter) {
+            self.editor_mut().open_line(true);
+            changed = true;
+        } else if Self::shortcut(ctx, Modifiers::COMMAND, Key::Enter) {
+            self.editor_mut().open_line(false);
+            changed = true;
+        }
+        if Self::shortcut(ctx, shifted, Key::Backslash)
+            || Self::shortcut(ctx, Modifiers::CTRL, Key::M)
+        {
+            moved |= self.editor_mut().jump_bracket();
+        }
+        if matches!(self.editor().format, Format::Code(_)) {
+            let select = ctx.input(|i| i.modifiers.shift);
+            if Self::shortcut(ctx, Modifiers::NONE, Key::Home)
+                || (cfg!(target_os = "macos")
+                    && Self::shortcut(ctx, Modifiers::MAC_CMD, Key::ArrowLeft))
+            {
+                self.editor_mut().smart_home(select);
+                moved = true;
+            }
+        }
+        if moved {
+            self.sync_cursor = true;
+        }
         // ponytail: egui procesa los lotes en orden; el emparejado usa eventos individuales.
         let edits_in_frame = ctx.input(|input| {
             input
@@ -2345,10 +2350,22 @@ impl App {
         let pairs = self.config.auto_pairs;
         let latex = self.editor().format == Format::Latex;
         let code = matches!(self.editor().format, Format::Code(_));
+        // Sin selección, copiar y cortar actúan sobre la línea entera.
+        let whole_line = self
+            .editor()
+            .anchor
+            .is_none_or(|a| a == self.editor().cursor);
         self.editor_mut().tab = self.config.tab_width;
         ctx.input_mut(|input| {
             input.events.retain(|event| {
                 let special = match event {
+                    egui::Event::Copy | egui::Event::Cut => whole_line,
+                    egui::Event::Key {
+                        key: Key::Tab,
+                        pressed: true,
+                        modifiers,
+                        ..
+                    } if *modifiers == Modifiers::SHIFT => true,
                     egui::Event::Text(text) => {
                         pairs
                             && text.chars().count() == 1
@@ -2396,14 +2413,25 @@ impl App {
                     self.editor_mut().backspace();
                     changed = true;
                 }
-                egui::Event::Key { key: Key::Tab, .. } => {
-                    if !self.editor().completions.is_empty() {
+                egui::Event::Copy => ctx.copy_text(self.editor().line_text()),
+                egui::Event::Cut => {
+                    ctx.copy_text(self.editor().line_text());
+                    self.editor_mut().delete_lines();
+                    changed = true;
+                }
+                egui::Event::Key {
+                    key: Key::Tab,
+                    modifiers,
+                    ..
+                } => {
+                    if modifiers.shift {
+                        self.editor_mut().rewrite_lines(false, true);
+                    } else if !self.editor().completions.is_empty() {
                         self.editor_mut().accept_completion();
                     } else if self.editor().selection().0 != self.editor().selection().1 {
                         self.editor_mut().rewrite_lines(false, false);
                     } else {
-                        let indent = " ".repeat(self.config.tab_width);
-                        self.editor_mut().insert(&indent);
+                        self.editor_mut().indent_cursor();
                     }
                     changed = true;
                 }
@@ -2578,6 +2606,10 @@ impl App {
                         let query = self.query.clone();
                         self.editor_mut().search(&query);
                     }
+                    // Mayús indica hacia atrás.
+                    let mut step = None;
+                    let mut close = ui.input(|i| i.key_pressed(Key::Escape))
+                        && self.editor().completions.is_empty();
                     egui::Frame::new()
                         .fill(self.panel_fill())
                         .inner_margin(8.0)
@@ -2587,6 +2619,7 @@ impl App {
                                 let response = ui.add(
                                     TextEdit::singleline(&mut self.query)
                                         .id_salt("find_query")
+                                        .return_key(None)
                                         .desired_width(180.0),
                                 );
                                 if self.focus_find {
@@ -2598,20 +2631,46 @@ impl App {
                                     let query = self.query.clone();
                                     self.editor_mut().search(&query);
                                 }
-                                if ui.button("Anterior").clicked() {
-                                    self.editor_mut().find_next(true);
-                                    self.sync_cursor = true;
+                                // Enter sigue buscando sin salir del campo.
+                                if response.has_focus()
+                                    && Self::shortcut(&ctx, Modifiers::NONE, Key::Enter)
+                                {
+                                    step = Some(ui.input(|i| i.modifiers.shift));
+                                }
+                                let editor = &mut self.documents[self.active].editor;
+                                let mut options = false;
+                                for (flag, label, help) in [
+                                    (&mut editor.search_case, "Aa", "Distinguir mayúsculas"),
+                                    (&mut editor.search_word, "ab", "Solo palabras completas"),
+                                    (&mut editor.search_regex, ".*", "Expresión regular"),
+                                ] {
+                                    options |=
+                                        ui.toggle_value(flag, label).on_hover_text(help).changed();
+                                }
+                                if options {
+                                    let query = self.query.clone();
+                                    self.editor_mut().search(&query);
+                                }
+                                if ui.button("Anterior").on_hover_text("Mayús+Enter").clicked() {
+                                    step = Some(true);
                                     self.focus_editor = true;
                                 }
-                                if ui.button("Siguiente").clicked() {
-                                    self.editor_mut().find_next(false);
-                                    self.sync_cursor = true;
+                                if ui.button("Siguiente").on_hover_text("Enter").clicked() {
+                                    step = Some(false);
                                     self.focus_editor = true;
                                 }
-                                ui.label(format!("{} coincidencias", self.editor().matches.len()));
-                                if ui.small_button("Cerrar").clicked() {
-                                    self.find = false;
+                                let count = self.editor().matches.len();
+                                if count == 0 && !self.query.is_empty() {
+                                    ui.label(
+                                        RichText::new("Sin coincidencias")
+                                            .color(col(self.theme.error)),
+                                    );
+                                } else if let Some(current) = marks::current_match(self.editor()) {
+                                    ui.label(format!("{current} de {count}"));
+                                } else {
+                                    ui.label(format!("{count} coincidencias"));
                                 }
+                                close |= ui.small_button("Cerrar").on_hover_text("Esc").clicked();
                             });
                             ui.horizontal(|ui| {
                                 ui.label("Reemplazar");
@@ -2619,12 +2678,14 @@ impl App {
                                     TextEdit::singleline(&mut self.replacement)
                                         .desired_width(180.0),
                                 );
-                                if ui.button("Reemplazar").clicked()
-                                    && self.editor().matches.contains(&self.editor().selection())
-                                {
-                                    let replacement = self.replacement.clone();
-                                    self.editor_mut().insert(&replacement);
-                                    self.changed_editor();
+                                // Reemplaza la coincidencia seleccionada y pasa a la siguiente.
+                                if ui.button("Reemplazar").clicked() {
+                                    if self.editor().matches.contains(&self.editor().selection()) {
+                                        let replacement = self.replacement.clone();
+                                        self.editor_mut().insert(&replacement);
+                                        self.changed_editor();
+                                    }
+                                    step = Some(false);
                                 }
                                 if ui.button("Todos").clicked() {
                                     let replacement = self.replacement.clone();
@@ -2633,6 +2694,14 @@ impl App {
                                 }
                             });
                         });
+                    if let Some(backwards) = step {
+                        self.editor_mut().find_next(backwards);
+                        self.sync_cursor = true;
+                    }
+                    if close {
+                        self.find = false;
+                        self.focus_editor = true;
+                    }
                 }
                 let rect = ui.available_rect_before_wrap();
                 self.editor_keys(&ctx);
@@ -2659,6 +2728,8 @@ impl App {
                 let spacing = self.config.line_height as f32;
                 let numbers = self.config.line_numbers;
                 let highlight_line = self.config.highlight_line;
+                let guides = self.config.indent_guides;
+                let find = self.find;
                 let completions = self.config.completions;
                 let shadow = if self.backdrop.image.is_some() {
                     (self.config.text_shadow * 255.0).round() as u8
@@ -2696,6 +2767,8 @@ impl App {
                 };
                 let mut cursor_position = None;
                 let mut changed_document = false;
+                let spelling = self.spell.begin(&ctx, &doc.editor, doc.id, &self.config);
+                let mut corrected = false;
                 ScrollArea::both()
                     .id_salt(doc.id.with("scroll"))
                     .auto_shrink([false, false])
@@ -2722,10 +2795,19 @@ impl App {
                                 .desired_width(text_width)
                                 .desired_rows(1)
                                 .code_editor()
+                                .event_filter(egui::EventFilter {
+                                    tab: true,
+                                    horizontal_arrows: true,
+                                    vertical_arrows: true,
+                                    escape: true,
+                                })
                                 .layouter(&mut layouter)
                                 .show(ui);
                             if self.focus_editor {
-                                output.response.request_focus();
+                                // Pedir el foco otra vez borra el filtro de Tab y flechas.
+                                if !output.response.has_focus() {
+                                    output.response.request_focus();
+                                }
                                 self.focus_editor = false;
                             }
                             let changed = doc.editor.take_touched();
@@ -2761,15 +2843,58 @@ impl App {
                                 if output.response.has_focus() && (changed || follow_cursor) {
                                     ui.scroll_to_rect(cursor_rect, None);
                                 }
+                            } else if follow_cursor {
+                                // Sin el foco (se busca desde la barra) el widget no
+                                // informa del cursor: se lleva la vista hasta él.
+                                let cursor = CCursor::new(doc.editor.index(doc.editor.cursor));
+                                let cursor_rect = output
+                                    .galley
+                                    .pos_from_cursor(cursor)
+                                    .translate(output.galley_pos.to_vec2());
+                                ui.scroll_to_rect(cursor_rect, Some(egui::Align::Center));
                             }
+                            let column_width =
+                                ui.fonts_mut(|f| f.glyph_width(&FontId::monospace(size), ' '));
+                            let marks = Marks::new(
+                                &doc.editor,
+                                &theme,
+                                output.response.has_focus(),
+                                find,
+                                guides,
+                                column_width,
+                            );
                             let visible = ui.clip_rect().y_range();
                             let scrim = col(theme.bg).gamma_multiply_u8(shadow);
                             let mut shadows = Vec::new();
                             let mut line = 1;
                             let mut starts_line = true;
+                            // Columna de la línea con que empieza cada fila visual.
+                            let mut column = 0;
+                            let mut misspelled = Vec::new();
                             for row in &output.galley.rows {
                                 let row_rect = row.rect().translate(output.galley_pos.to_vec2());
                                 if visible.intersects(row_rect.y_range()) {
+                                    marks.row(
+                                        &doc.editor,
+                                        line - 1,
+                                        column,
+                                        &row.glyphs,
+                                        row_rect,
+                                        starts_line,
+                                        &mut under,
+                                    );
+                                    if spelling && !row.glyphs.is_empty() {
+                                        self.spell.underline(
+                                            &doc.editor,
+                                            line - 1,
+                                            column,
+                                            &row.glyphs,
+                                            row_rect.left(),
+                                            row_rect.bottom(),
+                                            col(theme.error),
+                                            &mut misspelled,
+                                        );
+                                    }
                                     // La foto queda detrás de una sombra del color del fondo.
                                     let left = if starts_line && numbers {
                                         origin.x
@@ -2813,13 +2938,33 @@ impl App {
                                 starts_line = row.ends_with_newline;
                                 if starts_line {
                                     line += 1;
+                                    column = 0;
+                                } else {
+                                    column += row.glyphs.len();
                                 }
                             }
                             shadows.append(&mut under);
                             ui.painter().set(under_text, egui::Shape::Vec(shadows));
+                            ui.painter().extend(misspelled);
+                            if spelling
+                                && output.response.secondary_clicked()
+                                && let Some(pointer) = output.response.interact_pointer_pos()
+                            {
+                                let cursor =
+                                    output.galley.cursor_from_pos(pointer - output.galley_pos);
+                                self.spell.target(&doc.editor, cursor.index.0);
+                            }
+                            if spelling && self.spell.has_menu() {
+                                output.response.context_menu(|ui| {
+                                    corrected |= self.spell.menu_ui(ui, &mut doc.editor);
+                                });
+                            }
                         });
                     });
                 self.documents[self.active].layout = text_layout;
+                if corrected {
+                    self.changed_editor();
+                }
                 if changed_document && completions {
                     self.update_completion();
                 }
@@ -3200,6 +3345,13 @@ impl App {
                             "Ajustar líneas al ancho del editor",
                         )
                         .changed();
+                    changed |= crate::spell::preferences(ui, &mut self.config);
+                    changed |= ui
+                        .checkbox(
+                            &mut self.config.restore_session,
+                            "Volver a la última sesión al abrir sin argumentos",
+                        )
+                        .changed();
                     if ui
                         .checkbox(&mut self.config.invert_preview, "Invertir colores del PDF")
                         .changed()
@@ -3354,16 +3506,26 @@ impl App {
                     };
                     for (key, action) in [
                         ("N", "Nuevo"),
+                        ("Shift+N", "Nuevo proyecto"),
                         ("O", "Abrir"),
                         ("S", "Guardar"),
                         ("Shift+S", "Guardar como"),
                         ("R", "Compilar"),
                         ("F", "Buscar y reemplazar"),
                         ("G", "Ir a línea"),
+                        ("Shift+O", "Abrir rápido un archivo del proyecto"),
+                        ("Shift+F", "Buscar en el proyecto"),
+                        ("Shift+J", "Mostrar la línea en el PDF"),
                         ("T", "Insertar símbolo"),
                         ("B", "Negrita"),
                         ("I", "Cursiva"),
                         ("/", "Comentar"),
+                        ("D", "Seleccionar la palabra o su siguiente aparición"),
+                        ("L", "Seleccionar la línea"),
+                        ("Shift+D", "Duplicar la línea"),
+                        ("Shift+K", "Borrar la línea"),
+                        ("Enter", "Línea nueva debajo (con Shift, encima)"),
+                        ("Shift+\\", "Ir al corchete emparejado (o Ctrl+M)"),
                         ("Z", "Deshacer"),
                         ("Shift+Z", "Rehacer"),
                         (",", "Preferencias"),
@@ -3373,6 +3535,8 @@ impl App {
                         ui.label(format!("{modifier}+{key}   {action}"));
                     }
                     ui.separator();
+                    ui.label("Alt+↑ y Alt+↓ mueven la línea. Tab y Mayús+Tab cambian la sangría.");
+                    ui.label("Copiar o cortar sin selección toman la línea entera.");
                     ui.label("F5 compila. Tab acepta una sugerencia.");
                     ui.label("F2, F3 y F4 muestran u ocultan paneles.");
                     ui.label("Markdown tiene vista previa y esquema de títulos.");
@@ -3417,6 +3581,7 @@ impl App {
         let ctx = ui.ctx().clone();
         self.paint_background(ui, ui.max_rect());
         self.poll(&ctx);
+        self.watch_disk(&ctx);
         if ctx.input(|i| i.viewport().close_requested()) && !self.allow_quit {
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
             self.request_close(Pending::Quit, &ctx);
@@ -3429,8 +3594,7 @@ impl App {
             {
                 let path = file.path().to_path_buf();
                 if path.is_dir() {
-                    self.project = path;
-                    self.files = project_files(&self.project);
+                    self.open_project(path);
                 } else if let Err(e) = self.open(&path) {
                     self.message = e;
                 }
@@ -3471,6 +3635,21 @@ impl App {
                         .size(13.0)
                         .color(col(self.theme.muted())),
                     );
+                    let mut details = Vec::new();
+                    if matches!(self.editor().format, Format::Code(_)) {
+                        details.push(match self.editor().indent_style() {
+                            Indent::Tabs => "Tabuladores".to_string(),
+                            Indent::Spaces(width) => format!("Espacios: {width}"),
+                        });
+                    }
+                    details.extend(marks::selection_summary(self.editor()));
+                    for detail in details {
+                        ui.label(
+                            RichText::new(detail)
+                                .size(13.0)
+                                .color(col(self.theme.muted())),
+                        );
+                    }
                 });
             });
         });
@@ -3489,30 +3668,31 @@ impl App {
         }
         self.editor_panel(ui);
         self.dialogs(&ctx);
+        self.workspace_dialogs(&ctx);
     }
 }
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.draw(ui);
     }
+    #[cfg(feature = "screenshot")]
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.shutdown();
+    }
+    #[cfg(not(feature = "screenshot"))]
+    fn on_exit(&mut self) {
+        self.shutdown();
+    }
+}
+
+impl App {
+    fn shutdown(&mut self) {
+        self.remember_session();
+        let _ = self.config.save();
         self.cancel.store(true, Ordering::Relaxed);
         if let Some(worker) = self.compile_thread.take() {
             let _ = worker.join();
         }
-    }
-}
-
-fn poll_pdf(preview: &mut Preview, texture: &mut Option<TextureHandle>, ctx: &egui::Context) {
-    if preview.poll() && !preview.loading {
-        *texture = preview.image.as_ref().map(|image| {
-            let rgba = image.to_rgba8();
-            let color = egui::ColorImage::from_rgba_unmultiplied(
-                [rgba.width() as usize, rgba.height() as usize],
-                rgba.as_raw(),
-            );
-            ctx.load_texture("pdf", color, TextureOptions::LINEAR)
-        });
     }
 }
 
@@ -3529,7 +3709,12 @@ pub fn run(target: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
             .with_inner_size([1280.0, 820.0])
             .with_min_inner_size([480.0, 320.0])
             .with_icon(icon),
+        // Metal (wgpu) sigue el refresco de la pantalla; con OpenGL los cuadros
+        // salían por pares y ProMotion se quedaba en 60 Hz.
+        #[cfg(feature = "screenshot")]
         renderer: eframe::Renderer::Glow,
+        #[cfg(not(feature = "screenshot"))]
+        renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
     eframe::run_native(
@@ -3663,7 +3848,7 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
         assert_eq!(app.pdf().count, 2, "{}", app.pdf().error);
-        assert!(app.documents[pdf_index].texture.is_some());
+        assert!(app.pdf().rendered() > 0);
         app.pdf_mut().change_page(1);
         app.pdf_mut().change_zoom(1);
         app.activate(0);
@@ -3672,7 +3857,7 @@ mod tests {
         assert_eq!(app.editor().text(), saved_md);
         app.activate(pdf_index);
         assert_eq!(app.pdf().page, 1);
-        assert_eq!(app.pdf().zoom, 125);
+        assert_eq!(app.pdf().zoom, 125.0);
         tick(&mut app, &ctx, vec![]);
         app.open(&folder.join("imagen.png")).unwrap();
         tick(&mut app, &ctx, vec![]);
@@ -3687,7 +3872,7 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
         assert!(!app.pdf().error.is_empty());
-        assert!(app.documents[app.active].texture.is_none());
+        assert_eq!(app.pdf().rendered(), 0);
         app.templates = true;
         tick(&mut app, &ctx, vec![]);
         fs::remove_dir_all(folder).unwrap();
@@ -3765,8 +3950,12 @@ mod tests {
             let result = app.result.as_ref().expect("resultado del motor");
             assert!(result.ok, "{}", result.output);
             assert_eq!(app.preview.count, 1);
-            assert!(app.pdf_texture.is_some());
-            tick(&mut app, &ctx, vec![]);
+            let started = Instant::now();
+            while app.preview.rendered() == 0 && started.elapsed() < Duration::from_secs(10) {
+                tick(&mut app, &ctx, vec![]);
+                thread::sleep(Duration::from_millis(10));
+            }
+            assert_eq!(app.preview.rendered(), 1);
         }
         let galley = app.documents[0].layout.galley.clone().unwrap();
         assert_eq!(galley.text(), app.editor().source());
@@ -3776,6 +3965,95 @@ mod tests {
         fs::remove_dir_all(folder).unwrap();
     }
 
+    #[test]
+    fn code_shortcuts_completion_and_search() {
+        let folder = std::env::temp_dir().join(format!("miyu-code-{}", std::process::id()));
+        fs::create_dir_all(&folder).unwrap();
+        let path = folder.join("main.rs");
+        let source = "fn main() {\n    let total = 1;\n    let other = total;\n}\n";
+        fs::write(&path, source).unwrap();
+        let ctx = egui::Context::default();
+        let mut app = App::new(Some(path), &ctx).unwrap();
+        app.config.autocompile = false;
+        app.backdrop = Backdrop::default();
+        tick(&mut app, &ctx, vec![]);
+        tick(&mut app, &ctx, vec![]);
+        let place = |app: &mut App, row, col| {
+            app.editor_mut().goto(row, col);
+            app.sync_cursor = true;
+            tick(app, &ctx, vec![]);
+        };
+        let shifted = Modifiers::COMMAND | Modifiers::SHIFT;
+        place(&mut app, 1, 4);
+        tick(&mut app, &ctx, vec![key(Key::ArrowDown, Modifiers::ALT)]);
+        assert_eq!(app.editor().lines[2], "    let total = 1;");
+        assert_eq!(app.editor().cursor, Pos::new(2, 4));
+        tick(&mut app, &ctx, vec![key(Key::ArrowUp, Modifiers::ALT)]);
+        assert_eq!(app.editor().text(), source);
+        tick(&mut app, &ctx, vec![key(Key::D, shifted)]);
+        assert_eq!(app.editor().lines[1], app.editor().lines[2]);
+        assert_eq!(app.editor().cursor, Pos::new(2, 4));
+        tick(&mut app, &ctx, vec![key(Key::K, shifted)]);
+        assert_eq!(app.editor().text(), source);
+        tick(&mut app, &ctx, vec![key(Key::Tab, Modifiers::SHIFT)]);
+        assert_eq!(app.editor().lines[2], "let other = total;");
+        assert!(ctx.memory(|m| m.has_focus(app.documents[app.active].id)));
+        tick(&mut app, &ctx, vec![key(Key::Z, Modifiers::COMMAND)]);
+        assert_eq!(app.editor().text(), source);
+        // Sin selección, cortar se lleva la línea entera.
+        tick(&mut app, &ctx, vec![egui::Event::Cut]);
+        assert_eq!(app.editor().lines[2], "}");
+        tick(&mut app, &ctx, vec![key(Key::Z, Modifiers::COMMAND)]);
+        // Las letras seguidas completan con palabras del documento y se deshacen juntas.
+        place(&mut app, 1, 18);
+        tick(&mut app, &ctx, vec![key(Key::Enter, Modifiers::COMMAND)]);
+        assert_eq!(app.editor().cursor, Pos::new(2, 4));
+        for letter in ["o", "t", "h"] {
+            tick(&mut app, &ctx, vec![egui::Event::Text(letter.into())]);
+        }
+        assert_eq!(app.editor().completions[0].label, "other");
+        let cursor = app.editor().cursor;
+        tick(&mut app, &ctx, vec![key(Key::ArrowDown, Modifiers::NONE)]);
+        tick(&mut app, &ctx, vec![key(Key::ArrowUp, Modifiers::NONE)]);
+        assert_eq!(app.editor().cursor, cursor);
+        tick(&mut app, &ctx, vec![key(Key::Escape, Modifiers::NONE)]);
+        assert!(app.editor().completions.is_empty());
+        assert!(ctx.memory(|m| m.has_focus(app.documents[app.active].id)));
+        tick(&mut app, &ctx, vec![key(Key::Space, Modifiers::CTRL)]);
+        tick(&mut app, &ctx, vec![key(Key::Tab, Modifiers::NONE)]);
+        assert_eq!(app.editor().lines[2], "    other");
+        assert!(app.editor().completions.is_empty());
+        tick(&mut app, &ctx, vec![key(Key::Z, Modifiers::COMMAND)]);
+        assert_eq!(app.editor().lines[2], "    oth");
+        tick(&mut app, &ctx, vec![key(Key::Z, Modifiers::COMMAND)]);
+        assert_eq!(app.editor().lines[2], "    ");
+        tick(&mut app, &ctx, vec![key(Key::Z, Modifiers::COMMAND)]);
+        assert_eq!(app.editor().text(), source);
+        // Cmd+D selecciona la palabra, Cmd+F la busca y Enter recorre las coincidencias.
+        place(&mut app, 1, 10);
+        tick(&mut app, &ctx, vec![key(Key::D, Modifiers::COMMAND)]);
+        assert_eq!(app.editor().selected(), "total");
+        tick(&mut app, &ctx, vec![key(Key::F, Modifiers::COMMAND)]);
+        assert!(app.find);
+        assert_eq!(app.query, "total");
+        tick(&mut app, &ctx, vec![]);
+        assert_eq!(app.editor().matches.len(), 2);
+        assert_eq!(marks::current_match(app.editor()), Some(1));
+        tick(&mut app, &ctx, vec![key(Key::Enter, Modifiers::NONE)]);
+        assert_eq!(marks::current_match(app.editor()), Some(2));
+        assert_eq!(app.editor().text(), source);
+        let find_focus = ctx.memory(|m| m.focused());
+        assert_ne!(find_focus, Some(app.documents[app.active].id));
+        tick(&mut app, &ctx, vec![key(Key::Enter, Modifiers::NONE)]);
+        assert_eq!(marks::current_match(app.editor()), Some(1));
+        assert_eq!(ctx.memory(|m| m.focused()), find_focus);
+        tick(&mut app, &ctx, vec![key(Key::Enter, Modifiers::SHIFT)]);
+        assert_eq!(marks::current_match(app.editor()), Some(2));
+        tick(&mut app, &ctx, vec![key(Key::Escape, Modifiers::NONE)]);
+        assert!(!app.find);
+        assert!(!app.editor().dirty());
+        fs::remove_dir_all(folder).unwrap();
+    }
     /// Tiempos por cuadro con documentos grandes, en reposo y tecleando:
     /// `cargo test --release rendimiento -- --ignored --nocapture`
     #[test]

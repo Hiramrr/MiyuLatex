@@ -466,10 +466,16 @@ pub fn preferences(
             .checkbox(&mut config.highlight_line, "Resaltar la línea actual")
             .changed();
         changed |= ui
+            .checkbox(&mut config.indent_guides, "Guías de sangría en el código")
+            .changed();
+        changed |= ui
             .checkbox(&mut config.auto_pairs, "Cerrar llaves, corchetes y $")
             .changed();
         changed |= ui
-            .checkbox(&mut config.completions, "Sugerir comandos al escribir")
+            .checkbox(
+                &mut config.completions,
+                "Sugerir comandos y palabras al escribir",
+            )
             .changed();
         ui.add_enabled_ui(config.autocompile, |ui| {
             changed |= slider(

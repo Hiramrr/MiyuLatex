@@ -1,6 +1,12 @@
 use std::{
-    any::TypeId, cell::OnceCell, collections::BTreeMap, fs, io, ops::Range, path::PathBuf,
-    sync::OnceLock, time::Duration,
+    any::TypeId,
+    cell::{Cell, OnceCell},
+    collections::BTreeMap,
+    fs, io,
+    ops::Range,
+    path::PathBuf,
+    sync::OnceLock,
+    time::{Duration, Instant},
 };
 
 use eframe::egui::{self, text::CharIndex};
@@ -14,6 +20,9 @@ use crate::{
     latex::{self, Source},
     syntax::Syntax,
 };
+
+#[path = "code.rs"]
+pub mod code;
 
 #[derive(Deserialize)]
 pub struct Command {
@@ -106,6 +115,10 @@ pub struct Editor {
     outline: OnceCell<Vec<(usize, usize, String)>>,
     pub matches: Vec<(Pos, Pos)>,
     pub query: String,
+    /// Opciones de la búsqueda: mayúsculas exactas, palabra completa y expresión regular.
+    pub search_case: bool,
+    pub search_word: bool,
+    pub search_regex: bool,
     pub completions: Vec<Completion>,
     pub completion_index: usize,
     /// Espacios por nivel de sangría.
@@ -117,6 +130,15 @@ pub struct Editor {
     touched: bool,
     /// Última selección recibida del widget: revisión e índices de carácter.
     selected: Option<(u64, usize, usize)>,
+    /// Sangría detectada al abrir el archivo; solo se aplica al código.
+    indent: Option<code::Indent>,
+    /// Dónde y cuándo acabó la última letra tecleada: las seguidas se deshacen juntas.
+    typing: Option<(Pos, Instant)>,
+    /// Corchete emparejado ya calculado para una revisión y un cursor.
+    #[allow(clippy::type_complexity)]
+    bracket: Cell<Option<(u64, Pos, Option<(Pos, Pos)>)>>,
+    /// Tras aceptar una palabra no se sugiere nada hasta que cambie algo.
+    quiet: Option<(u64, Pos)>,
 }
 
 pub fn byte_col(line: &str, col: usize) -> usize {
@@ -134,6 +156,7 @@ impl Editor {
             suggested_name: "sin-titulo.tex".into(),
             syntax: Syntax::new(&format, &lines),
             format,
+            indent: code::detect_indent(&lines),
             lines,
             text: normalized,
             revision: 0,
@@ -143,6 +166,9 @@ impl Editor {
             outline: OnceCell::new(),
             matches: Vec::new(),
             query: String::new(),
+            search_case: false,
+            search_word: false,
+            search_regex: false,
             completions: Vec::new(),
             completion_index: 0,
             tab: 4,
@@ -151,6 +177,9 @@ impl Editor {
             line_ending,
             touched: false,
             selected: None,
+            typing: None,
+            bracket: Cell::new(None),
+            quiet: None,
         };
         e.refresh();
         e
@@ -217,6 +246,7 @@ impl Editor {
         self.outline.get_or_init(|| match self.format {
             Format::Markdown => format::markdown_outline(&self.text),
             Format::Latex => self.latex_outline(),
+            Format::Code(ref language) => code::symbols(&self.lines, language, self.unit_columns()),
             _ => Vec::new(),
         })
     }
@@ -320,6 +350,7 @@ impl Editor {
     }
     fn remember(&mut self) {
         // ponytail: instantáneas hasta 16 MiB, usar un rope si hacen falta documentos mayores.
+        self.typing = None;
         self.undo.push(self.snapshot());
         let mut bytes = self.undo.iter().map(|s| s.text.len()).sum::<usize>();
         while self.undo.len() > 1 && (bytes > 16 * 1024 * 1024 || self.undo.len() > 200) {
@@ -331,6 +362,7 @@ impl Editor {
         self.load(&s.text);
         self.cursor = s.cursor;
         self.anchor = s.anchor;
+        self.typing = None;
     }
     /// Sustituye el tramo `[a, b)` por `text` sin tocar el historial ni el cursor.
     fn splice(&mut self, a: Pos, b: Pos, text: &str) {
@@ -368,16 +400,31 @@ impl Editor {
         self.lines.splice(head..head + removed, rows);
         self.refresh();
     }
-    /// Edición que llega del widget de texto: un paso de historial por cuadro.
+    /// Edición que llega del widget de texto: un paso de historial por cuadro,
+    /// y uno solo para las letras de una palabra tecleadas seguidas.
     fn widget_edit(&mut self, a: Pos, b: Pos, text: &str) {
         if !self.format.editable() || (a == b && text.is_empty()) {
             return;
         }
+        let mut chars = text.chars();
+        let typed = match (chars.next(), chars.next()) {
+            (Some(c), None) if a == b && c != '\n' => Some(c),
+            _ => None,
+        };
+        let continues = typed.is_some_and(|c| !c.is_whitespace())
+            && self
+                .typing
+                .is_some_and(|(at, when)| at == a && when.elapsed() < Duration::from_secs(1));
         if !self.touched {
-            self.remember();
+            if continues {
+                self.redo.clear();
+            } else {
+                self.remember();
+            }
             self.touched = true;
         }
         self.splice(a, b, text);
+        self.typing = typed.map(|_| (Pos::new(a.row, a.col + 1), Instant::now()));
     }
     pub fn undo(&mut self, redo: bool) {
         if !self.format.editable() {
@@ -462,6 +509,18 @@ impl Editor {
             _ => {}
         }
     }
+    /// Adopta el texto que otro programa dejó en disco; se puede deshacer.
+    pub fn reload(&mut self, disk: String) {
+        self.line_ending = if disk.contains("\r\n") { "\r\n" } else { "\n" };
+        self.set_text(&disk.replace("\r\n", "\n"));
+        self.saved = disk;
+    }
+    /// El archivo se renombró en disco sin cambiar su contenido.
+    pub fn renamed(&mut self, path: PathBuf) {
+        let format = Format::detect(&path);
+        self.path = Some(path);
+        self.set_format(format);
+    }
     pub fn save(&mut self, path: Option<PathBuf>) -> io::Result<()> {
         if !self.format.editable() {
             return Err(io::Error::other("Este archivo se abre en modo de lectura"));
@@ -514,14 +573,24 @@ impl Editor {
         if query.is_empty() {
             return;
         }
-        let pat = if query.chars().any(char::is_uppercase) {
-            regex::escape(query)
+        let mut pat = if self.search_regex {
+            query.to_string()
         } else {
-            format!("(?i){}", regex::escape(query))
+            regex::escape(query)
         };
-        let re = Regex::new(&pat).unwrap();
+        if self.search_word {
+            pat = format!(r"\b(?:{pat})\b");
+        }
+        // Sin la opción, una mayúscula en la búsqueda la hace exacta.
+        if !self.search_case && !query.chars().any(char::is_uppercase) {
+            pat = format!("(?i){pat}");
+        }
+        // Una expresión a medio escribir no es un error: aún no encuentra nada.
+        let Ok(re) = Regex::new(&pat) else {
+            return;
+        };
         for (row, line) in self.lines.iter().enumerate() {
-            for m in re.find_iter(line) {
+            for m in re.find_iter(line).filter(|m| !m.is_empty()) {
                 self.matches.push((
                     Pos::new(row, line[..m.start()].chars().count()),
                     Pos::new(row, line[..m.end()].chars().count()),
@@ -607,6 +676,9 @@ impl Editor {
         let (a, b) = self.selection();
         if c == '\'' && self.format.label() == "Rust" && a == b {
             self.insert("'");
+            return;
+        }
+        if self.closes_block(c) {
             return;
         }
         let following = self.char_at(self.cursor);
@@ -725,8 +797,16 @@ impl Editor {
                 } else {
                     String::new()
                 };
-                self.insert(&format!("\n{indent}{}{tail}", " ".repeat(self.tab)));
-                self.cursor = Pos::new(row + 1, indent.chars().count() + self.tab);
+                let unit = self.unit();
+                self.insert(&format!("\n{indent}{unit}{tail}"));
+                self.cursor = Pos::new(row + 1, (indent + &unit).chars().count());
+            } else if self.format.label() == "Python"
+                && regex(r"^\s*(return|pass|break|continue|raise)\b").is_match(before)
+            {
+                // Tras salir del bloque, la línea siguiente pierde un nivel.
+                let unit = self.unit();
+                let indent = indent.strip_suffix(unit.as_str()).unwrap_or(&indent);
+                self.insert(&format!("\n{indent}"));
             } else {
                 self.insert(&format!("\n{indent}"));
             }
@@ -791,7 +871,11 @@ impl Editor {
                 .iter()
                 .filter(|l| !l.trim().is_empty())
                 .all(|l| l.trim_start().starts_with(prefix) && l.trim_end().ends_with(suffix));
-        let tab = self.tab;
+        let unit = self.unit();
+        let tab = unit
+            .chars()
+            .count()
+            .max(if unit == "\t" { self.tab } else { 0 });
         let lines: Vec<_> = self.lines[a.row..=last]
             .iter()
             .map(|line| {
@@ -836,7 +920,7 @@ impl Editor {
                         })
                         .to_string()
                 } else {
-                    format!("{}{line}", " ".repeat(tab))
+                    format!("{unit}{line}")
                 }
             })
             .collect();
@@ -853,14 +937,22 @@ impl Editor {
     /// a un comando, así que sin `\` no hace falta reunir las fuentes.
     pub fn wants_completion(&self) -> bool {
         let line = &self.lines[self.cursor.row];
-        self.format == Format::Latex
-            && self.anchor.is_none_or(|anchor| anchor == self.cursor)
-            && line[..byte_col(line, self.cursor.col)].contains('\\')
+        self.anchor.is_none_or(|anchor| anchor == self.cursor)
+            && match self.format {
+                Format::Latex => line[..byte_col(line, self.cursor.col)].contains('\\'),
+                // En el código se completan las palabras del propio documento.
+                Format::Code(_) => self.word_prefix().is_some(),
+                _ => false,
+            }
     }
     pub fn update_completion(&mut self) {
         if !self.wants_completion() {
             self.completions.clear();
             self.completion_index = 0;
+            return;
+        }
+        if self.format != Format::Latex {
+            self.update_completion_from(&[]);
             return;
         }
         let mut sources = Vec::new();
@@ -885,10 +977,11 @@ impl Editor {
     pub fn update_completion_from(&mut self, sources: &[Source]) {
         self.completions.clear();
         self.completion_index = 0;
-        if self.format != Format::Latex {
+        if !self.wants_completion() {
             return;
         }
-        if !self.wants_completion() {
+        if self.format != Format::Latex {
+            self.complete_words();
             return;
         }
         let line = &self.lines[self.cursor.row];
@@ -1003,6 +1096,11 @@ impl Editor {
         };
         let a = Pos::new(self.cursor.row, c.start);
         let mut b = self.cursor;
+        if c.kind == "word" {
+            self.replace(a, b, &c.insert);
+            self.quiet = Some((self.revision, self.cursor));
+            return;
+        }
         let closes = self.char_at(b) == '}';
         if c.kind == "env.begin" {
             if closes {

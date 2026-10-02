@@ -32,6 +32,8 @@ pub struct Config {
     pub line_height: f64,
     pub line_numbers: bool,
     pub highlight_line: bool,
+    /// Líneas verticales que marcan los niveles de sangría del código.
+    pub indent_guides: bool,
     pub tab_width: usize,
     pub auto_pairs: bool,
     pub completions: bool,
@@ -42,6 +44,15 @@ pub struct Config {
     pub color_accent: String,
     pub color_bg: String,
     pub color_fg: String,
+    /// Sin argumentos, abrir el proyecto y las pestañas de la última vez.
+    pub restore_session: bool,
+    pub session_project: String,
+    pub session_files: Vec<String>,
+    pub session_active: String,
+    pub recent_projects: Vec<String>,
+    pub spellcheck: bool,
+    /// Idioma del diccionario, como lo nombra el sistema: `es`, `en`, `es_MX`.
+    pub spell_language: String,
     #[serde(flatten)]
     extra: BTreeMap<String, Value>,
 }
@@ -71,6 +82,7 @@ impl Default for Config {
             line_height: 1.0,
             line_numbers: true,
             highlight_line: false,
+            indent_guides: true,
             tab_width: 4,
             auto_pairs: true,
             completions: true,
@@ -81,12 +93,23 @@ impl Default for Config {
             color_accent: String::new(),
             color_bg: String::new(),
             color_fg: String::new(),
+            restore_session: true,
+            session_project: String::new(),
+            session_files: Vec::new(),
+            session_active: String::new(),
+            recent_projects: Vec::new(),
+            spellcheck: true,
+            spell_language: "es".into(),
             extra: BTreeMap::new(),
         }
     }
 }
 
 pub fn directory() -> PathBuf {
+    // Las pruebas no leen ni escriben las preferencias reales.
+    #[cfg(test)]
+    return std::env::temp_dir().join(format!("miyu-config-{}", std::process::id()));
+    #[cfg(not(test))]
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
@@ -161,6 +184,9 @@ impl Config {
                 Value::String(_) => v.is_string(),
                 Value::Bool(_) => v.is_boolean(),
                 Value::Number(_) => v.is_number(),
+                Value::Array(_) => v
+                    .as_array()
+                    .is_some_and(|list| list.iter().all(Value::is_string)),
                 _ => true,
             });
             if valid {

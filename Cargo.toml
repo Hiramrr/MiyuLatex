@@ -9,7 +9,7 @@ name = "miyu"
 path = "src/main.rs"
 
 [dependencies]
-eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts", "accesskit", "x11", "wayland", "links"] }
+eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "accesskit", "x11", "wayland", "links"] }
 rfd = "0.17"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp"] }
 hayro = "0.7"
@@ -20,10 +20,17 @@ egui_extras = { version = "0.36", default-features = false, features = ["syntect
 egui_commonmark = { version = "0.25", features = ["better_syntax_highlighting"] }
 pulldown-cmark = { version = "0.13", default-features = false }
 syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
+flate2 = "1"
 zip = { version = "2.4", default-features = false, features = ["deflate"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSSpellChecker"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSRange", "NSString"] }
+
 [features]
-screenshot = ["eframe/__screenshot"]
+# La captura de eframe solo existe con glow.
+screenshot = ["eframe/__screenshot", "eframe/glow"]
 
 [profile.release]
 opt-level = 3

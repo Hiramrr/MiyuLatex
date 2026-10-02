@@ -51,6 +51,13 @@ arrastrarlos a la ventana. Los archivos y el esquema están a la izquierda,
 las pestañas del editor en el centro y la vista previa a la derecha. Los
 problemas de compilación abren el archivo en la línea correspondiente.
 
+Nuevo proyecto, en la barra de herramientas o en Archivo, crea una carpeta
+con el nombre y la ubicación que elijas. Puedes dejarla vacía, usar una
+plantilla LaTeX o crear un archivo de código vacío para Python, Rust,
+JavaScript, TypeScript, C, C++ o Go. El proyecto se abre al crearlo y aparece
+en los recientes. Las pestañas abiertas se conservan. Si la carpeta ya existe,
+el diálogo pide otro nombre.
+
 Markdown tiene vista previa mientras escribes, tablas, listas de tareas,
 enlaces, imágenes locales y bloques de código. El esquema muestra los títulos
 y permite saltar a ellos. Los enlaces a otros archivos locales abren una
@@ -64,9 +71,25 @@ definido. JSON no admite comentarios. Los archivos UTF-8 sin una gramática
 conocida se editan como texto. Guardar como conserva la extensión y cambia el
 resaltado según el nuevo nombre. Se conservan los saltos de línea de Windows.
 
-Los PDF se abren en pestañas de solo lectura, con navegación por página, zoom,
-recarga y acceso al visor del sistema. Cada pestaña conserva su página y su
-zoom. También puedes ver PNG, JPEG, WebP, GIF y BMP. La compilación automática
+El editor detecta la sangría del archivo y la usa al pulsar Tab o Enter.
+Mayús+Tab quita un nivel. Las guías de sangría se activan en Preferencias.
+El esquema lista funciones, clases y tipos, y el completado ofrece palabras
+del documento y del lenguaje. Las flechas eligen una sugerencia, Tab la
+inserta y Esc cierra la lista. Copiar o cortar sin selección toma la línea
+entera. Deshacer agrupa las letras escritas seguidas.
+
+Buscar resalta las coincidencias y muestra la posición actual. Enter y
+Mayús+Enter avanzan o retroceden desde el campo de búsqueda, y Esc lo cierra.
+`Aa` distingue mayúsculas, `ab` busca palabras completas y `.*` permite
+expresiones regulares. Sin `Aa`, escribir una mayúscula también hace la
+búsqueda exacta. Reemplazar cambia la coincidencia seleccionada y avanza.
+
+Los PDF se abren en pestañas de solo lectura. Las páginas van seguidas en una
+columna que se recorre con la rueda o el trackpad. El zoom se ajusta con los
+botones, con el gesto de pellizco o con `Cmd` y la rueda. Ajustar vuelve al
+ancho del panel. Cada página se rasteriza a la resolución de la pantalla y solo
+cuando se ve. Al recompilar se conserva la posición. Cada pestaña conserva su
+página y su zoom. También puedes ver PNG, JPEG, WebP, GIF y BMP. La compilación automática
 solo se aplica a LaTeX. PDF e imágenes no pasan por el guardado de texto.
 
 El diálogo Nuevo permite crear Markdown, texto, código Python o Rust, además
@@ -75,6 +98,7 @@ de las plantillas LaTeX. Abre y guarda otros lenguajes con su extensión.
 | Tecla en macOS | Acción |
 | --- | --- |
 | `Cmd+N` | Nuevo documento desde plantilla |
+| `Cmd+Shift+N` | Crear una carpeta de proyecto |
 | `Cmd+O` | Abrir archivo con el diálogo del sistema |
 | `Cmd+S` / `Cmd+Shift+S` | Guardar / guardar como |
 | `Cmd+W` / `Ctrl+Tab` | Cerrar / cambiar pestaña |
@@ -82,8 +106,19 @@ de las plantillas LaTeX. Abre y guarda otros lenguajes con su extensión.
 | `F6` | Abrir el PDF en el visor del sistema |
 | `F2` / `F3` / `F4` | Mostrar archivos, vista previa o problemas |
 | `Cmd+F` / `Cmd+G` | Buscar y reemplazar / ir a línea |
+| `Cmd+Shift+F` | Buscar en el proyecto |
+| `Cmd+Shift+O` | Abrir rápido un archivo del proyecto |
+| `Cmd+Shift+J` | Mostrar en el PDF la línea del cursor |
 | `Cmd+T` | Insertar un símbolo LaTeX |
 | `Cmd+B` / `Cmd+I` / `Cmd+/` | Negrita, cursiva o comentar líneas |
+| `Tab` / `Shift+Tab` | Completar o añadir sangría / quitar sangría |
+| `Ctrl+Espacio` | Mostrar sugerencias |
+| `Alt+↑` / `Alt+↓` | Subir / bajar las líneas seleccionadas |
+| `Cmd+Shift+D` / `Alt+Shift+↓` | Duplicar las líneas seleccionadas |
+| `Cmd+Shift+K` / `Cmd+L` | Borrar / seleccionar líneas enteras |
+| `Cmd+Enter` / `Cmd+Shift+Enter` | Abrir una línea debajo / encima |
+| `Cmd+D` | Seleccionar la palabra o su siguiente aparición |
+| `Cmd+Shift+\` / `Ctrl+M` | Ir al corchete emparejado |
 | `Cmd+Z` / `Cmd+Shift+Z` | Deshacer / rehacer |
 | `Cmd+C` / `Cmd+X` / `Cmd+V` | Copiar, cortar y pegar |
 | `Cmd+P` / `Cmd+,` | Preferencias |
@@ -115,12 +150,43 @@ fuentes y abre cada resultado en su línea.
 
 El menú LaTeX permite detener la compilación, recompilar desde cero, compilar
 al dejar de escribir y guardar automáticamente. Contar palabras usa `texcount`
-si está instalado y, si no, una estimación propia. Con `synctex` instalado,
-Mostrar esta línea en el PDF lleva del código a la página, y desde el PDF se
-vuelve a la línea de origen.
+si está instalado y, si no, una estimación propia.
+
+Mostrar esta línea en el PDF (`Cmd+Shift+J`) lleva del código a la página y
+resalta la línea. Un doble clic o `Cmd`+clic en el PDF abre el archivo y la
+línea de origen. Miyu lee el `.synctex.gz` que deja la compilación, sin el
+programa `synctex`, así que funciona con Tectonic solo.
 
 Cada guardado deja una versión en `~/.config/miyulatex/history`. Historial del
 archivo muestra las últimas 100 y restaura cualquiera en el editor.
+
+## Sesión y archivos
+
+Sin argumentos, Miyu vuelve al proyecto y a las pestañas de la última vez.
+`miyu .` abre la carpeta actual. Se desactiva en Preferencias. Archivo guarda
+los diez proyectos recientes.
+
+Abrir rápido (`Cmd+Shift+O`) busca entre los archivos del proyecto por
+cualquier parte del nombre o por sus letras en orden.
+
+Archivos muestra el proyecto como un árbol de carpetas que se pliegan con un
+clic. El filtro deja solo las carpetas con coincidencias. Nuevo crea un archivo
+dentro del proyecto. El clic derecho sobre un archivo permite renombrarlo,
+duplicarlo, mostrarlo en su carpeta y copiar su ruta. Sobre una carpeta, crea
+un archivo dentro de ella.
+
+Si otro programa cambia un archivo abierto, Miyu lo recarga al volver a la
+ventana. Deshacer recupera el texto anterior. Si además tenías cambios sin
+guardar, pregunta si recargar o conservar tu versión.
+
+## Ortografía
+
+En macOS, el editor subraya las palabras que no están en el diccionario del
+sistema. Revisa la prosa de LaTeX, Markdown y texto. Deja fuera comandos,
+matemáticas, comentarios, claves de citas y referencias, rutas y el preámbulo.
+El clic derecho sobre una palabra subrayada ofrece sugerencias, la añade al
+diccionario o la ignora durante la sesión. El idioma se elige en Preferencias
+y por defecto es español.
 
 ## Personalización
 
@@ -168,7 +234,10 @@ El ejecutable Rust no necesita Python.
 ```sh
 cargo test
 cargo clippy --all-targets -- -D warnings
+cargo fmt --check
 ```
+
+Las pruebas usan una carpeta de preferencias temporal y no tocan la real.
 
 Las pruebas de integración de egui simulan edición Unicode, deshacer, pares,
 autocompletado, guardado y protección de cambios externos. También verifican
@@ -187,7 +256,8 @@ miyu --render-background foto.png fondo.png 1280 800 2 1 16131f dither
 `highlight.rs` resalta LaTeX, `syntax.rs` mantiene el resaltado por líneas y
 `layout.rs` maqueta solo las que cambian. `format.rs` detecta formatos y extrae
 el esquema de Markdown, `latex.rs` reúne fuentes, etiquetas, citas, historial y
-ZIP del proyecto, `compiler.rs` compila, lee problemas y llama a SyncTeX,
-`preview.rs` rasteriza el PDF, `backdrop.rs` trama la foto, `theme.rs` define
+ZIP del proyecto, `compiler.rs` compila y lee problemas, `synctex.rs` relaciona
+el código con el PDF, `preview.rs` rasteriza y dibuja el PDF, `spell.rs` revisa
+la ortografía, `workspace.rs` lleva la sesión y los archivos, `backdrop.rs` trama la foto, `theme.rs` define
 los temas, `custom.rs` aplica la personalización y `config.rs` guarda
 preferencias. `snippets.json` conserva los catálogos de la versión Python.

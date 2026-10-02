@@ -11,7 +11,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{editor::regex, latex};
+use crate::{editor::regex, latex, synctex};
 
 pub const ENGINES: &[&str] = &["tectonic", "latexmk", "pdflatex", "xelatex", "lualatex"];
 pub const AUX: &[&str] = &[
@@ -578,57 +578,18 @@ pub fn utility(command: Command) -> Result<String, String> {
     }
 }
 
+/// Página (desde 0) y posición en puntos PDF de una línea del código.
 pub fn sync_forward(pdf: &Path, source: &Path, line: usize) -> Result<(usize, f32, f32), String> {
-    let mut command = Command::new(
-        which("synctex")
-            .ok_or("Instala SyncTeX con una distribución TeX para sincronizar código y PDF")?,
-    );
-    command
-        .args(["view", "-i"])
-        .arg(format!("{line}:0:{}", source.display()))
-        .arg("-o")
-        .arg(pdf);
-    let output = utility(command)?;
-    let number = |key| {
-        output.lines().find_map(|line| {
-            line.strip_prefix(key)
-                .and_then(|v| v.trim().parse::<f32>().ok())
-        })
-    };
-    let page = number("Page:").ok_or("SyncTeX no encontró esta línea en el PDF")? as usize;
-    Ok((
-        page.saturating_sub(1),
-        number("x:").unwrap_or(0.0),
-        number("y:").unwrap_or(0.0),
-    ))
+    synctex::Index::load(pdf)?
+        .forward(source, line)
+        .ok_or_else(|| "SyncTeX no encontró esta línea en el PDF".into())
 }
 
+/// Archivo y línea del punto del PDF, en puntos desde arriba a la izquierda.
 pub fn sync_back(pdf: &Path, page: usize, x: f32, y: f32) -> Result<(PathBuf, usize), String> {
-    let mut command = Command::new(
-        which("synctex")
-            .ok_or("Instala SyncTeX con una distribución TeX para sincronizar código y PDF")?,
-    );
-    command
-        .args(["edit", "-o"])
-        .arg(format!("{}:{x}:{y}:{}", page + 1, pdf.display()));
-    let output = utility(command)?;
-    let input = output
-        .lines()
-        .find_map(|l| l.strip_prefix("Input:"))
-        .ok_or("SyncTeX no encontró el archivo de origen")?;
-    let line = output
-        .lines()
-        .find_map(|l| l.strip_prefix("Line:").and_then(|n| n.trim().parse().ok()))
-        .unwrap_or(1);
-    let path = PathBuf::from(input.trim());
-    Ok((
-        if path.is_absolute() {
-            path
-        } else {
-            pdf.parent().unwrap_or(Path::new(".")).join(path)
-        },
-        line,
-    ))
+    synctex::Index::load(pdf)?
+        .backward(page, x, y)
+        .ok_or_else(|| "SyncTeX no encontró el código de este punto".into())
 }
 
 #[cfg(test)]

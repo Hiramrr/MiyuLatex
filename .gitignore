@@ -15,5 +15,21 @@ wheels/
 # macOS
 .DS_Store
 
+# Auxiliares de LaTeX
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.xdv
+/*.log
+
 # Documentos personales
 /tesis/
