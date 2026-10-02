@@ -1,0 +1,426 @@
+/* MiyuLaTeX · estilos */
+
+Screen {
+    layers: base overlay;
+    background: $background;
+}
+
+#header {
+    height: 1;
+    background: $panel;
+    color: $foreground;
+}
+
+#body {
+    height: 1fr;
+}
+
+/* ---------------------------------------------------------------- paneles */
+
+#sidebar, #preview, #panel {
+    border: round $border;
+    border-title-color: $primary;
+    border-title-style: bold;
+    background: $background;
+}
+
+#sidebar:focus-within, #preview:focus-within, #panel:focus-within {
+    border: round $primary 60%;
+}
+
+#sidebar {
+    width: 26;
+    min-width: 20;
+    padding: 0;
+}
+
+#center {
+    width: 1fr;
+    min-width: 30;
+}
+
+#preview {
+    width: 40%;
+    min-width: 30;
+}
+
+#panel {
+    height: 11;
+    border-title-color: $secondary;
+}
+
+/* ---------------------------------------------------------------- pestañas */
+
+Tabs {
+    background: $background;
+}
+
+Tab {
+    color: $text-muted;
+    padding: 0 2;
+}
+
+Tab:hover {
+    color: $foreground;
+}
+
+Tab.-active {
+    color: $primary;
+    text-style: bold;
+}
+
+Tabs:focus Tab.-active {
+    background: $primary 18%;
+    color: $primary;
+}
+
+Underline > .underline--bar {
+    color: $primary;
+    background: $border;
+}
+
+TabbedContent, ContentSwitcher, TabPane {
+    height: 1fr;
+    padding: 0;
+    background: $background;
+}
+
+#editors {
+    height: 1fr;
+}
+
+/* ------------------------------------------------------------------ editor */
+
+LatexEditor {
+    border: none;
+    padding: 0;
+    height: 1fr;
+    scrollbar-size-vertical: 1;
+}
+
+LatexEditor:focus {
+    border: none;
+}
+
+#welcome {
+    height: 1fr;
+    align: center middle;
+    background: $background;
+}
+
+#welcome-text {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    padding: 1 3;
+    text-align: center;
+    color: $foreground;
+    background: $background;
+}
+
+#completion {
+    layer: overlay;
+    position: absolute;
+    width: 44;
+    height: auto;
+    max-height: 10;
+    background: $panel;
+    border: round $primary;
+    padding: 0;
+    scrollbar-size-vertical: 1;
+}
+
+#completion > .option-list--option-highlighted {
+    background: $primary 30%;
+    color: $foreground;
+    text-style: none;
+}
+
+/* ------------------------------------------------------------------ buscar */
+
+#findbar {
+    height: 3;
+    background: $surface;
+    border-top: solid $border;
+    padding: 0 1;
+}
+
+#findbar Horizontal {
+    height: 1;
+}
+
+.find-label {
+    width: 12;
+    color: $text-muted;
+}
+
+#findbar Input {
+    width: 1fr;
+    height: 1;
+    border: none;
+    padding: 0 1;
+    background: $panel;
+}
+
+#findbar Input:focus {
+    border: none;
+    background: $panel;
+    background-tint: $primary 14%;
+}
+
+#findbar Button {
+    margin: 0 0 0 1;
+    min-width: 3;
+    background: $panel;
+    color: $foreground;
+}
+
+#findbar Button:hover {
+    background: $primary;
+    color: $background;
+}
+
+#find-count {
+    width: 16;
+    padding: 0 1;
+    color: $text-muted;
+    text-align: right;
+}
+
+/* --------------------------------------------------------- árbol y esquema */
+
+Tree, DirectoryTree {
+    background: $background;
+    padding: 0 1;
+    scrollbar-size-vertical: 1;
+}
+
+Tree > .tree--cursor {
+    background: $primary 25%;
+    color: $foreground;
+    text-style: bold;
+}
+
+Tree > .tree--guides {
+    color: $border;
+}
+
+Tree > .tree--guides-hover, Tree > .tree--guides-selected {
+    color: $primary 60%;
+}
+
+DirectoryTree > .directory-tree--folder {
+    color: $secondary;
+    text-style: bold;
+}
+
+DirectoryTree > .directory-tree--file {
+    color: $foreground;
+}
+
+/* ------------------------------------------------------------------ salida */
+
+OptionList {
+    background: $background;
+    border: none;
+    padding: 0 1;
+    scrollbar-size-vertical: 1;
+}
+
+OptionList:focus {
+    border: none;
+}
+
+OptionList > .option-list--option-highlighted {
+    background: $primary 22%;
+    color: $foreground;
+    text-style: none;
+}
+
+OptionList:focus > .option-list--option-highlighted {
+    background: $primary 30%;
+}
+
+#log {
+    background: $background;
+    color: $text-muted;
+    padding: 0 1;
+    scrollbar-size-vertical: 1;
+}
+
+/* ------------------------------------------------------------ vista previa */
+
+#preview-bar {
+    height: 1;
+    background: $background;
+    padding: 0 1;
+}
+
+#preview-title {
+    width: 1fr;
+    color: $text-muted;
+}
+
+#preview-bar Button {
+    min-width: 3;
+    margin: 0;
+    background: $background;
+    color: $primary;
+}
+
+#preview-bar Button:hover {
+    background: $primary;
+    color: $background;
+}
+
+#pdf-page, #pdf-zoom {
+    width: auto;
+    min-width: 5;
+    padding: 0 1;
+    text-align: center;
+}
+
+#preview-scroll {
+    height: 1fr;
+    background: $background;
+    scrollbar-size-vertical: 1;
+    align: center top;
+}
+
+#preview-empty {
+    width: 100%;
+    height: 100%;
+    content-align: center middle;
+    text-align: center;
+    color: $foreground;
+}
+
+#preview-image {
+    width: 100%;
+    height: auto;
+}
+
+/* ------------------------------------------------------------------ estado */
+
+#status {
+    height: 1;
+    background: $panel;
+}
+
+#status-left {
+    width: 1fr;
+}
+
+#status-right {
+    width: auto;
+}
+
+Footer {
+    background: $surface;
+}
+
+FooterKey > .footer-key--key {
+    color: $primary;
+    background: $surface;
+    text-style: bold;
+}
+
+FooterKey > .footer-key--description {
+    color: $text-muted;
+    background: $surface;
+}
+
+/* ---------------------------------------------------------------- diálogos */
+
+ModalScreen {
+    align: center middle;
+    background: $background 60%;
+}
+
+.dialog {
+    width: 72;
+    max-width: 92%;
+    height: auto;
+    max-height: 80%;
+    background: $surface;
+    border: round $primary;
+    padding: 1 2;
+}
+
+.dialog-small {
+    width: 60;
+}
+
+.dialog-wide {
+    width: 84;
+    height: 80%;
+}
+
+.dialog-title {
+    width: 100%;
+    color: $primary;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+.dialog-body {
+    margin-bottom: 1;
+}
+
+.dialog-hint {
+    margin-top: 1;
+    color: $text-muted;
+}
+
+.dialog Input {
+    border: tall $border;
+    background: $panel;
+}
+
+.dialog Input:focus {
+    border: tall $primary;
+}
+
+.dialog OptionList {
+    height: auto;
+    max-height: 16;
+    margin-top: 1;
+    background: $surface;
+    padding: 0;
+}
+
+.dialog-buttons {
+    height: auto;
+    align: right middle;
+}
+
+.dialog-buttons Button {
+    margin-left: 2;
+}
+
+.dialog VerticalScroll {
+    scrollbar-size-vertical: 1;
+}
+
+.help-section {
+    color: $secondary;
+    text-style: bold;
+    margin-top: 1;
+}
+
+.help-table {
+    padding-left: 2;
+}
+
+Toast {
+    background: $panel;
+    border-left: outer $primary;
+}
+
+Toast.-error {
+    border-left: outer $error;
+}
+
+Toast.-warning {
+    border-left: outer $warning;
+}

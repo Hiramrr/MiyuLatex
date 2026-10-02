@@ -1,0 +1,1639 @@
+{
+  "commands": [
+    {
+      "name": "documentclass",
+      "snippet": "\\documentclass{$0}",
+      "help": "clase del documento"
+    },
+    {
+      "name": "usepackage",
+      "snippet": "\\usepackage{$0}",
+      "help": "cargar paquete"
+    },
+    {
+      "name": "begin",
+      "snippet": "\\begin{$0}",
+      "help": "abrir entorno"
+    },
+    {
+      "name": "end",
+      "snippet": "\\end{$0}",
+      "help": "cerrar entorno"
+    },
+    {
+      "name": "part",
+      "snippet": "\\part{$0}",
+      "help": "parte"
+    },
+    {
+      "name": "chapter",
+      "snippet": "\\chapter{$0}",
+      "help": "capítulo"
+    },
+    {
+      "name": "section",
+      "snippet": "\\section{$0}",
+      "help": "sección"
+    },
+    {
+      "name": "subsection",
+      "snippet": "\\subsection{$0}",
+      "help": "subsección"
+    },
+    {
+      "name": "subsubsection",
+      "snippet": "\\subsubsection{$0}",
+      "help": "sub-subsección"
+    },
+    {
+      "name": "paragraph",
+      "snippet": "\\paragraph{$0}",
+      "help": "párrafo titulado"
+    },
+    {
+      "name": "title",
+      "snippet": "\\title{$0}",
+      "help": "título"
+    },
+    {
+      "name": "author",
+      "snippet": "\\author{$0}",
+      "help": "autor"
+    },
+    {
+      "name": "date",
+      "snippet": "\\date{$0}",
+      "help": "fecha"
+    },
+    {
+      "name": "maketitle",
+      "snippet": "\\maketitle",
+      "help": "imprimir título"
+    },
+    {
+      "name": "tableofcontents",
+      "snippet": "\\tableofcontents",
+      "help": "índice"
+    },
+    {
+      "name": "listoffigures",
+      "snippet": "\\listoffigures",
+      "help": "índice de figuras"
+    },
+    {
+      "name": "listoftables",
+      "snippet": "\\listoftables",
+      "help": "índice de tablas"
+    },
+    {
+      "name": "appendix",
+      "snippet": "\\appendix",
+      "help": "apéndices"
+    },
+    {
+      "name": "input",
+      "snippet": "\\input{$0}",
+      "help": "incluir archivo"
+    },
+    {
+      "name": "include",
+      "snippet": "\\include{$0}",
+      "help": "incluir capítulo"
+    },
+    {
+      "name": "newcommand",
+      "snippet": "\\newcommand{\\$0}[1]{}",
+      "help": "definir comando"
+    },
+    {
+      "name": "renewcommand",
+      "snippet": "\\renewcommand{\\$0}{}",
+      "help": "redefinir comando"
+    },
+    {
+      "name": "newtheorem",
+      "snippet": "\\newtheorem{$0}{}",
+      "help": "definir teorema"
+    },
+    {
+      "name": "newpage",
+      "snippet": "\\newpage",
+      "help": "salto de página"
+    },
+    {
+      "name": "clearpage",
+      "snippet": "\\clearpage",
+      "help": "salto y vaciado de flotantes"
+    },
+    {
+      "name": "noindent",
+      "snippet": "\\noindent",
+      "help": "sin sangría"
+    },
+    {
+      "name": "vspace",
+      "snippet": "\\vspace{$0}",
+      "help": "espacio vertical"
+    },
+    {
+      "name": "hspace",
+      "snippet": "\\hspace{$0}",
+      "help": "espacio horizontal"
+    },
+    {
+      "name": "bigskip",
+      "snippet": "\\bigskip",
+      "help": "salto grande"
+    },
+    {
+      "name": "medskip",
+      "snippet": "\\medskip",
+      "help": "salto medio"
+    },
+    {
+      "name": "smallskip",
+      "snippet": "\\smallskip",
+      "help": "salto pequeño"
+    },
+    {
+      "name": "centering",
+      "snippet": "\\centering",
+      "help": "centrar"
+    },
+    {
+      "name": "item",
+      "snippet": "\\item $0",
+      "help": "elemento de lista"
+    },
+    {
+      "name": "textbf",
+      "snippet": "\\textbf{$0}",
+      "help": "negrita"
+    },
+    {
+      "name": "textit",
+      "snippet": "\\textit{$0}",
+      "help": "cursiva"
+    },
+    {
+      "name": "emph",
+      "snippet": "\\emph{$0}",
+      "help": "énfasis"
+    },
+    {
+      "name": "underline",
+      "snippet": "\\underline{$0}",
+      "help": "subrayado"
+    },
+    {
+      "name": "texttt",
+      "snippet": "\\texttt{$0}",
+      "help": "monoespaciado"
+    },
+    {
+      "name": "textsc",
+      "snippet": "\\textsc{$0}",
+      "help": "versalitas"
+    },
+    {
+      "name": "textsf",
+      "snippet": "\\textsf{$0}",
+      "help": "sin serifa"
+    },
+    {
+      "name": "textcolor",
+      "snippet": "\\textcolor{$0}{}",
+      "help": "color de texto"
+    },
+    {
+      "name": "footnote",
+      "snippet": "\\footnote{$0}",
+      "help": "nota al pie"
+    },
+    {
+      "name": "url",
+      "snippet": "\\url{$0}",
+      "help": "enlace"
+    },
+    {
+      "name": "href",
+      "snippet": "\\href{$0}{}",
+      "help": "enlace con texto"
+    },
+    {
+      "name": "tiny",
+      "snippet": "\\tiny",
+      "help": ""
+    },
+    {
+      "name": "small",
+      "snippet": "\\small",
+      "help": ""
+    },
+    {
+      "name": "normalsize",
+      "snippet": "\\normalsize",
+      "help": ""
+    },
+    {
+      "name": "large",
+      "snippet": "\\large",
+      "help": ""
+    },
+    {
+      "name": "Large",
+      "snippet": "\\Large",
+      "help": ""
+    },
+    {
+      "name": "LARGE",
+      "snippet": "\\LARGE",
+      "help": ""
+    },
+    {
+      "name": "huge",
+      "snippet": "\\huge",
+      "help": ""
+    },
+    {
+      "name": "Huge",
+      "snippet": "\\Huge",
+      "help": ""
+    },
+    {
+      "name": "label",
+      "snippet": "\\label{$0}",
+      "help": "etiqueta"
+    },
+    {
+      "name": "ref",
+      "snippet": "\\ref{$0}",
+      "help": "referencia"
+    },
+    {
+      "name": "eqref",
+      "snippet": "\\eqref{$0}",
+      "help": "referencia a ecuación"
+    },
+    {
+      "name": "pageref",
+      "snippet": "\\pageref{$0}",
+      "help": "referencia a página"
+    },
+    {
+      "name": "autoref",
+      "snippet": "\\autoref{$0}",
+      "help": "referencia automática"
+    },
+    {
+      "name": "cite",
+      "snippet": "\\cite{$0}",
+      "help": "cita"
+    },
+    {
+      "name": "citep",
+      "snippet": "\\citep{$0}",
+      "help": "cita entre paréntesis"
+    },
+    {
+      "name": "citet",
+      "snippet": "\\citet{$0}",
+      "help": "cita textual"
+    },
+    {
+      "name": "bibliography",
+      "snippet": "\\bibliography{$0}",
+      "help": "archivo .bib"
+    },
+    {
+      "name": "bibliographystyle",
+      "snippet": "\\bibliographystyle{$0}",
+      "help": "estilo bibliográfico"
+    },
+    {
+      "name": "printbibliography",
+      "snippet": "\\printbibliography",
+      "help": "imprimir bibliografía"
+    },
+    {
+      "name": "includegraphics",
+      "snippet": "\\includegraphics[width=\\linewidth]{$0}",
+      "help": "imagen"
+    },
+    {
+      "name": "caption",
+      "snippet": "\\caption{$0}",
+      "help": "pie de figura o tabla"
+    },
+    {
+      "name": "hline",
+      "snippet": "\\hline",
+      "help": "línea horizontal"
+    },
+    {
+      "name": "toprule",
+      "snippet": "\\toprule",
+      "help": ""
+    },
+    {
+      "name": "midrule",
+      "snippet": "\\midrule",
+      "help": ""
+    },
+    {
+      "name": "bottomrule",
+      "snippet": "\\bottomrule",
+      "help": ""
+    },
+    {
+      "name": "multicolumn",
+      "snippet": "\\multicolumn{$0}{c}{}",
+      "help": "celda de varias columnas"
+    },
+    {
+      "name": "frac",
+      "snippet": "\\frac{$0}{}",
+      "help": "fracción"
+    },
+    {
+      "name": "dfrac",
+      "snippet": "\\dfrac{$0}{}",
+      "help": "fracción grande"
+    },
+    {
+      "name": "sqrt",
+      "snippet": "\\sqrt{$0}",
+      "help": "raíz"
+    },
+    {
+      "name": "sum",
+      "snippet": "\\sum_{$0}^{}",
+      "help": "sumatoria"
+    },
+    {
+      "name": "prod",
+      "snippet": "\\prod_{$0}^{}",
+      "help": "productoria"
+    },
+    {
+      "name": "int",
+      "snippet": "\\int_{$0}^{}",
+      "help": "integral"
+    },
+    {
+      "name": "iint",
+      "snippet": "\\iint",
+      "help": ""
+    },
+    {
+      "name": "oint",
+      "snippet": "\\oint",
+      "help": ""
+    },
+    {
+      "name": "lim",
+      "snippet": "\\lim_{$0}",
+      "help": "límite"
+    },
+    {
+      "name": "partial",
+      "snippet": "\\partial",
+      "help": "∂"
+    },
+    {
+      "name": "nabla",
+      "snippet": "\\nabla",
+      "help": "∇"
+    },
+    {
+      "name": "infty",
+      "snippet": "\\infty",
+      "help": "∞"
+    },
+    {
+      "name": "cdot",
+      "snippet": "\\cdot",
+      "help": "·"
+    },
+    {
+      "name": "cdots",
+      "snippet": "\\cdots",
+      "help": "⋯"
+    },
+    {
+      "name": "ldots",
+      "snippet": "\\ldots",
+      "help": "…"
+    },
+    {
+      "name": "times",
+      "snippet": "\\times",
+      "help": "×"
+    },
+    {
+      "name": "div",
+      "snippet": "\\div",
+      "help": "÷"
+    },
+    {
+      "name": "pm",
+      "snippet": "\\pm",
+      "help": "±"
+    },
+    {
+      "name": "mp",
+      "snippet": "\\mp",
+      "help": "∓"
+    },
+    {
+      "name": "leq",
+      "snippet": "\\leq",
+      "help": "≤"
+    },
+    {
+      "name": "geq",
+      "snippet": "\\geq",
+      "help": "≥"
+    },
+    {
+      "name": "neq",
+      "snippet": "\\neq",
+      "help": "≠"
+    },
+    {
+      "name": "approx",
+      "snippet": "\\approx",
+      "help": "≈"
+    },
+    {
+      "name": "equiv",
+      "snippet": "\\equiv",
+      "help": "≡"
+    },
+    {
+      "name": "sim",
+      "snippet": "\\sim",
+      "help": "∼"
+    },
+    {
+      "name": "propto",
+      "snippet": "\\propto",
+      "help": "∝"
+    },
+    {
+      "name": "in",
+      "snippet": "\\in",
+      "help": "∈"
+    },
+    {
+      "name": "notin",
+      "snippet": "\\notin",
+      "help": "∉"
+    },
+    {
+      "name": "subset",
+      "snippet": "\\subset",
+      "help": "⊂"
+    },
+    {
+      "name": "subseteq",
+      "snippet": "\\subseteq",
+      "help": "⊆"
+    },
+    {
+      "name": "supset",
+      "snippet": "\\supset",
+      "help": "⊃"
+    },
+    {
+      "name": "cup",
+      "snippet": "\\cup",
+      "help": "∪"
+    },
+    {
+      "name": "cap",
+      "snippet": "\\cap",
+      "help": "∩"
+    },
+    {
+      "name": "emptyset",
+      "snippet": "\\emptyset",
+      "help": "∅"
+    },
+    {
+      "name": "forall",
+      "snippet": "\\forall",
+      "help": "∀"
+    },
+    {
+      "name": "exists",
+      "snippet": "\\exists",
+      "help": "∃"
+    },
+    {
+      "name": "neg",
+      "snippet": "\\neg",
+      "help": "¬"
+    },
+    {
+      "name": "land",
+      "snippet": "\\land",
+      "help": "∧"
+    },
+    {
+      "name": "lor",
+      "snippet": "\\lor",
+      "help": "∨"
+    },
+    {
+      "name": "to",
+      "snippet": "\\to",
+      "help": "→"
+    },
+    {
+      "name": "rightarrow",
+      "snippet": "\\rightarrow",
+      "help": "→"
+    },
+    {
+      "name": "leftarrow",
+      "snippet": "\\leftarrow",
+      "help": "←"
+    },
+    {
+      "name": "Rightarrow",
+      "snippet": "\\Rightarrow",
+      "help": "⇒"
+    },
+    {
+      "name": "Leftarrow",
+      "snippet": "\\Leftarrow",
+      "help": "⇐"
+    },
+    {
+      "name": "Leftrightarrow",
+      "snippet": "\\Leftrightarrow",
+      "help": "⇔"
+    },
+    {
+      "name": "leftrightarrow",
+      "snippet": "\\leftrightarrow",
+      "help": "↔"
+    },
+    {
+      "name": "mapsto",
+      "snippet": "\\mapsto",
+      "help": "↦"
+    },
+    {
+      "name": "implies",
+      "snippet": "\\implies",
+      "help": "⟹"
+    },
+    {
+      "name": "iff",
+      "snippet": "\\iff",
+      "help": "⟺"
+    },
+    {
+      "name": "left",
+      "snippet": "\\left($0\\right)",
+      "help": "delimitador izquierdo"
+    },
+    {
+      "name": "right",
+      "snippet": "\\right",
+      "help": "delimitador derecho"
+    },
+    {
+      "name": "mathbb",
+      "snippet": "\\mathbb{$0}",
+      "help": "pizarra: ℝ ℕ ℤ"
+    },
+    {
+      "name": "mathbf",
+      "snippet": "\\mathbf{$0}",
+      "help": "negrita matemática"
+    },
+    {
+      "name": "mathcal",
+      "snippet": "\\mathcal{$0}",
+      "help": "caligráfica"
+    },
+    {
+      "name": "mathrm",
+      "snippet": "\\mathrm{$0}",
+      "help": "redonda"
+    },
+    {
+      "name": "mathit",
+      "snippet": "\\mathit{$0}",
+      "help": "cursiva matemática"
+    },
+    {
+      "name": "text",
+      "snippet": "\\text{$0}",
+      "help": "texto dentro de fórmula"
+    },
+    {
+      "name": "operatorname",
+      "snippet": "\\operatorname{$0}",
+      "help": "operador"
+    },
+    {
+      "name": "overline",
+      "snippet": "\\overline{$0}",
+      "help": "barra superior"
+    },
+    {
+      "name": "hat",
+      "snippet": "\\hat{$0}",
+      "help": "circunflejo"
+    },
+    {
+      "name": "bar",
+      "snippet": "\\bar{$0}",
+      "help": "barra"
+    },
+    {
+      "name": "vec",
+      "snippet": "\\vec{$0}",
+      "help": "vector"
+    },
+    {
+      "name": "dot",
+      "snippet": "\\dot{$0}",
+      "help": "derivada temporal"
+    },
+    {
+      "name": "ddot",
+      "snippet": "\\ddot{$0}",
+      "help": "segunda derivada"
+    },
+    {
+      "name": "tilde",
+      "snippet": "\\tilde{$0}",
+      "help": "tilde"
+    },
+    {
+      "name": "binom",
+      "snippet": "\\binom{$0}{}",
+      "help": "binomial"
+    },
+    {
+      "name": "sin",
+      "snippet": "\\sin",
+      "help": ""
+    },
+    {
+      "name": "cos",
+      "snippet": "\\cos",
+      "help": ""
+    },
+    {
+      "name": "tan",
+      "snippet": "\\tan",
+      "help": ""
+    },
+    {
+      "name": "log",
+      "snippet": "\\log",
+      "help": ""
+    },
+    {
+      "name": "ln",
+      "snippet": "\\ln",
+      "help": ""
+    },
+    {
+      "name": "exp",
+      "snippet": "\\exp",
+      "help": ""
+    },
+    {
+      "name": "min",
+      "snippet": "\\min",
+      "help": ""
+    },
+    {
+      "name": "max",
+      "snippet": "\\max",
+      "help": ""
+    },
+    {
+      "name": "det",
+      "snippet": "\\det",
+      "help": ""
+    },
+    {
+      "name": "dim",
+      "snippet": "\\dim",
+      "help": ""
+    },
+    {
+      "name": "ker",
+      "snippet": "\\ker",
+      "help": ""
+    },
+    {
+      "name": "gcd",
+      "snippet": "\\gcd",
+      "help": ""
+    },
+    {
+      "name": "quad",
+      "snippet": "\\quad",
+      "help": "espacio"
+    },
+    {
+      "name": "qquad",
+      "snippet": "\\qquad",
+      "help": "espacio doble"
+    },
+    {
+      "name": "alpha",
+      "snippet": "\\alpha",
+      "help": "α"
+    },
+    {
+      "name": "beta",
+      "snippet": "\\beta",
+      "help": "β"
+    },
+    {
+      "name": "gamma",
+      "snippet": "\\gamma",
+      "help": "γ"
+    },
+    {
+      "name": "delta",
+      "snippet": "\\delta",
+      "help": "δ"
+    },
+    {
+      "name": "epsilon",
+      "snippet": "\\epsilon",
+      "help": "ϵ"
+    },
+    {
+      "name": "varepsilon",
+      "snippet": "\\varepsilon",
+      "help": "ε"
+    },
+    {
+      "name": "zeta",
+      "snippet": "\\zeta",
+      "help": "ζ"
+    },
+    {
+      "name": "eta",
+      "snippet": "\\eta",
+      "help": "η"
+    },
+    {
+      "name": "theta",
+      "snippet": "\\theta",
+      "help": "θ"
+    },
+    {
+      "name": "vartheta",
+      "snippet": "\\vartheta",
+      "help": "ϑ"
+    },
+    {
+      "name": "iota",
+      "snippet": "\\iota",
+      "help": "ι"
+    },
+    {
+      "name": "kappa",
+      "snippet": "\\kappa",
+      "help": "κ"
+    },
+    {
+      "name": "lambda",
+      "snippet": "\\lambda",
+      "help": "λ"
+    },
+    {
+      "name": "mu",
+      "snippet": "\\mu",
+      "help": "μ"
+    },
+    {
+      "name": "nu",
+      "snippet": "\\nu",
+      "help": "ν"
+    },
+    {
+      "name": "xi",
+      "snippet": "\\xi",
+      "help": "ξ"
+    },
+    {
+      "name": "pi",
+      "snippet": "\\pi",
+      "help": "π"
+    },
+    {
+      "name": "rho",
+      "snippet": "\\rho",
+      "help": "ρ"
+    },
+    {
+      "name": "sigma",
+      "snippet": "\\sigma",
+      "help": "σ"
+    },
+    {
+      "name": "tau",
+      "snippet": "\\tau",
+      "help": "τ"
+    },
+    {
+      "name": "upsilon",
+      "snippet": "\\upsilon",
+      "help": "υ"
+    },
+    {
+      "name": "phi",
+      "snippet": "\\phi",
+      "help": "ϕ"
+    },
+    {
+      "name": "varphi",
+      "snippet": "\\varphi",
+      "help": "φ"
+    },
+    {
+      "name": "chi",
+      "snippet": "\\chi",
+      "help": "χ"
+    },
+    {
+      "name": "psi",
+      "snippet": "\\psi",
+      "help": "ψ"
+    },
+    {
+      "name": "omega",
+      "snippet": "\\omega",
+      "help": "ω"
+    },
+    {
+      "name": "Gamma",
+      "snippet": "\\Gamma",
+      "help": "Γ"
+    },
+    {
+      "name": "Delta",
+      "snippet": "\\Delta",
+      "help": "Δ"
+    },
+    {
+      "name": "Theta",
+      "snippet": "\\Theta",
+      "help": "Θ"
+    },
+    {
+      "name": "Lambda",
+      "snippet": "\\Lambda",
+      "help": "Λ"
+    },
+    {
+      "name": "Xi",
+      "snippet": "\\Xi",
+      "help": "Ξ"
+    },
+    {
+      "name": "Pi",
+      "snippet": "\\Pi",
+      "help": "Π"
+    },
+    {
+      "name": "Sigma",
+      "snippet": "\\Sigma",
+      "help": "Σ"
+    },
+    {
+      "name": "Phi",
+      "snippet": "\\Phi",
+      "help": "Φ"
+    },
+    {
+      "name": "Psi",
+      "snippet": "\\Psi",
+      "help": "Ψ"
+    },
+    {
+      "name": "Omega",
+      "snippet": "\\Omega",
+      "help": "Ω"
+    }
+  ],
+  "symbols": [
+    {
+      "glyph": "α",
+      "command": "\\alpha",
+      "name": "alfa",
+      "group": "Griego"
+    },
+    {
+      "glyph": "β",
+      "command": "\\beta",
+      "name": "beta",
+      "group": "Griego"
+    },
+    {
+      "glyph": "γ",
+      "command": "\\gamma",
+      "name": "gamma",
+      "group": "Griego"
+    },
+    {
+      "glyph": "δ",
+      "command": "\\delta",
+      "name": "delta",
+      "group": "Griego"
+    },
+    {
+      "glyph": "ε",
+      "command": "\\varepsilon",
+      "name": "épsilon",
+      "group": "Griego"
+    },
+    {
+      "glyph": "ζ",
+      "command": "\\zeta",
+      "name": "zeta",
+      "group": "Griego"
+    },
+    {
+      "glyph": "η",
+      "command": "\\eta",
+      "name": "eta",
+      "group": "Griego"
+    },
+    {
+      "glyph": "θ",
+      "command": "\\theta",
+      "name": "theta",
+      "group": "Griego"
+    },
+    {
+      "glyph": "κ",
+      "command": "\\kappa",
+      "name": "kappa",
+      "group": "Griego"
+    },
+    {
+      "glyph": "λ",
+      "command": "\\lambda",
+      "name": "lambda",
+      "group": "Griego"
+    },
+    {
+      "glyph": "μ",
+      "command": "\\mu",
+      "name": "mu",
+      "group": "Griego"
+    },
+    {
+      "glyph": "ν",
+      "command": "\\nu",
+      "name": "nu",
+      "group": "Griego"
+    },
+    {
+      "glyph": "ξ",
+      "command": "\\xi",
+      "name": "xi",
+      "group": "Griego"
+    },
+    {
+      "glyph": "π",
+      "command": "\\pi",
+      "name": "pi",
+      "group": "Griego"
+    },
+    {
+      "glyph": "ρ",
+      "command": "\\rho",
+      "name": "rho",
+      "group": "Griego"
+    },
+    {
+      "glyph": "σ",
+      "command": "\\sigma",
+      "name": "sigma",
+      "group": "Griego"
+    },
+    {
+      "glyph": "τ",
+      "command": "\\tau",
+      "name": "tau",
+      "group": "Griego"
+    },
+    {
+      "glyph": "φ",
+      "command": "\\varphi",
+      "name": "phi",
+      "group": "Griego"
+    },
+    {
+      "glyph": "χ",
+      "command": "\\chi",
+      "name": "ji",
+      "group": "Griego"
+    },
+    {
+      "glyph": "ψ",
+      "command": "\\psi",
+      "name": "psi",
+      "group": "Griego"
+    },
+    {
+      "glyph": "ω",
+      "command": "\\omega",
+      "name": "omega",
+      "group": "Griego"
+    },
+    {
+      "glyph": "Γ",
+      "command": "\\Gamma",
+      "name": "Gamma mayúscula",
+      "group": "Griego"
+    },
+    {
+      "glyph": "Δ",
+      "command": "\\Delta",
+      "name": "Delta mayúscula",
+      "group": "Griego"
+    },
+    {
+      "glyph": "Θ",
+      "command": "\\Theta",
+      "name": "Theta mayúscula",
+      "group": "Griego"
+    },
+    {
+      "glyph": "Λ",
+      "command": "\\Lambda",
+      "name": "Lambda mayúscula",
+      "group": "Griego"
+    },
+    {
+      "glyph": "Π",
+      "command": "\\Pi",
+      "name": "Pi mayúscula",
+      "group": "Griego"
+    },
+    {
+      "glyph": "Σ",
+      "command": "\\Sigma",
+      "name": "Sigma mayúscula",
+      "group": "Griego"
+    },
+    {
+      "glyph": "Φ",
+      "command": "\\Phi",
+      "name": "Phi mayúscula",
+      "group": "Griego"
+    },
+    {
+      "glyph": "Ψ",
+      "command": "\\Psi",
+      "name": "Psi mayúscula",
+      "group": "Griego"
+    },
+    {
+      "glyph": "Ω",
+      "command": "\\Omega",
+      "name": "Omega mayúscula",
+      "group": "Griego"
+    },
+    {
+      "glyph": "±",
+      "command": "\\pm",
+      "name": "más menos",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "∓",
+      "command": "\\mp",
+      "name": "menos más",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "×",
+      "command": "\\times",
+      "name": "por",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "÷",
+      "command": "\\div",
+      "name": "entre",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "·",
+      "command": "\\cdot",
+      "name": "punto centrado",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "∘",
+      "command": "\\circ",
+      "name": "composición",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "⊕",
+      "command": "\\oplus",
+      "name": "suma directa",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "⊗",
+      "command": "\\otimes",
+      "name": "producto tensorial",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "∑",
+      "command": "\\sum",
+      "name": "sumatoria",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "∏",
+      "command": "\\prod",
+      "name": "productoria",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "∫",
+      "command": "\\int",
+      "name": "integral",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "∬",
+      "command": "\\iint",
+      "name": "integral doble",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "∮",
+      "command": "\\oint",
+      "name": "integral de contorno",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "∂",
+      "command": "\\partial",
+      "name": "derivada parcial",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "∇",
+      "command": "\\nabla",
+      "name": "nabla gradiente",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "√",
+      "command": "\\sqrt{}",
+      "name": "raíz cuadrada",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "∞",
+      "command": "\\infty",
+      "name": "infinito",
+      "group": "Operadores"
+    },
+    {
+      "glyph": "≤",
+      "command": "\\leq",
+      "name": "menor o igual",
+      "group": "Relaciones"
+    },
+    {
+      "glyph": "≥",
+      "command": "\\geq",
+      "name": "mayor o igual",
+      "group": "Relaciones"
+    },
+    {
+      "glyph": "≠",
+      "command": "\\neq",
+      "name": "distinto",
+      "group": "Relaciones"
+    },
+    {
+      "glyph": "≈",
+      "command": "\\approx",
+      "name": "aproximadamente",
+      "group": "Relaciones"
+    },
+    {
+      "glyph": "≡",
+      "command": "\\equiv",
+      "name": "equivalente idéntico",
+      "group": "Relaciones"
+    },
+    {
+      "glyph": "∼",
+      "command": "\\sim",
+      "name": "similar",
+      "group": "Relaciones"
+    },
+    {
+      "glyph": "≅",
+      "command": "\\cong",
+      "name": "congruente",
+      "group": "Relaciones"
+    },
+    {
+      "glyph": "∝",
+      "command": "\\propto",
+      "name": "proporcional",
+      "group": "Relaciones"
+    },
+    {
+      "glyph": "≪",
+      "command": "\\ll",
+      "name": "mucho menor",
+      "group": "Relaciones"
+    },
+    {
+      "glyph": "≫",
+      "command": "\\gg",
+      "name": "mucho mayor",
+      "group": "Relaciones"
+    },
+    {
+      "glyph": "⊥",
+      "command": "\\perp",
+      "name": "perpendicular",
+      "group": "Relaciones"
+    },
+    {
+      "glyph": "∥",
+      "command": "\\parallel",
+      "name": "paralelo",
+      "group": "Relaciones"
+    },
+    {
+      "glyph": "∈",
+      "command": "\\in",
+      "name": "pertenece",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "∉",
+      "command": "\\notin",
+      "name": "no pertenece",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "⊂",
+      "command": "\\subset",
+      "name": "subconjunto",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "⊆",
+      "command": "\\subseteq",
+      "name": "subconjunto o igual",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "⊃",
+      "command": "\\supset",
+      "name": "superconjunto",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "∪",
+      "command": "\\cup",
+      "name": "unión",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "∩",
+      "command": "\\cap",
+      "name": "intersección",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "∅",
+      "command": "\\emptyset",
+      "name": "conjunto vacío",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "∖",
+      "command": "\\setminus",
+      "name": "diferencia",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "ℝ",
+      "command": "\\mathbb{R}",
+      "name": "reales",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "ℕ",
+      "command": "\\mathbb{N}",
+      "name": "naturales",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "ℤ",
+      "command": "\\mathbb{Z}",
+      "name": "enteros",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "ℚ",
+      "command": "\\mathbb{Q}",
+      "name": "racionales",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "ℂ",
+      "command": "\\mathbb{C}",
+      "name": "complejos",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "∀",
+      "command": "\\forall",
+      "name": "para todo",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "∃",
+      "command": "\\exists",
+      "name": "existe",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "¬",
+      "command": "\\neg",
+      "name": "negación",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "∧",
+      "command": "\\land",
+      "name": "y lógico",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "∨",
+      "command": "\\lor",
+      "name": "o lógico",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "∴",
+      "command": "\\therefore",
+      "name": "por lo tanto",
+      "group": "Conjuntos y lógica"
+    },
+    {
+      "glyph": "→",
+      "command": "\\to",
+      "name": "flecha derecha",
+      "group": "Flechas"
+    },
+    {
+      "glyph": "←",
+      "command": "\\leftarrow",
+      "name": "flecha izquierda",
+      "group": "Flechas"
+    },
+    {
+      "glyph": "↔",
+      "command": "\\leftrightarrow",
+      "name": "flecha doble",
+      "group": "Flechas"
+    },
+    {
+      "glyph": "⇒",
+      "command": "\\Rightarrow",
+      "name": "implica",
+      "group": "Flechas"
+    },
+    {
+      "glyph": "⇐",
+      "command": "\\Leftarrow",
+      "name": "implicado por",
+      "group": "Flechas"
+    },
+    {
+      "glyph": "⇔",
+      "command": "\\Leftrightarrow",
+      "name": "si y solo si",
+      "group": "Flechas"
+    },
+    {
+      "glyph": "↦",
+      "command": "\\mapsto",
+      "name": "aplica en",
+      "group": "Flechas"
+    },
+    {
+      "glyph": "↑",
+      "command": "\\uparrow",
+      "name": "flecha arriba",
+      "group": "Flechas"
+    },
+    {
+      "glyph": "↓",
+      "command": "\\downarrow",
+      "name": "flecha abajo",
+      "group": "Flechas"
+    },
+    {
+      "glyph": "⟶",
+      "command": "\\longrightarrow",
+      "name": "flecha larga",
+      "group": "Flechas"
+    },
+    {
+      "glyph": "…",
+      "command": "\\ldots",
+      "name": "puntos suspensivos",
+      "group": "Varios"
+    },
+    {
+      "glyph": "⋯",
+      "command": "\\cdots",
+      "name": "puntos centrados",
+      "group": "Varios"
+    },
+    {
+      "glyph": "⋮",
+      "command": "\\vdots",
+      "name": "puntos verticales",
+      "group": "Varios"
+    },
+    {
+      "glyph": "⋱",
+      "command": "\\ddots",
+      "name": "puntos diagonales",
+      "group": "Varios"
+    },
+    {
+      "glyph": "°",
+      "command": "^\\circ",
+      "name": "grados",
+      "group": "Varios"
+    },
+    {
+      "glyph": "ℏ",
+      "command": "\\hbar",
+      "name": "hbar constante de Planck",
+      "group": "Varios"
+    },
+    {
+      "glyph": "ℓ",
+      "command": "\\ell",
+      "name": "ele cursiva",
+      "group": "Varios"
+    },
+    {
+      "glyph": "′",
+      "command": "\\prime",
+      "name": "prima",
+      "group": "Varios"
+    },
+    {
+      "glyph": "†",
+      "command": "\\dagger",
+      "name": "daga",
+      "group": "Varios"
+    },
+    {
+      "glyph": "★",
+      "command": "\\star",
+      "name": "estrella",
+      "group": "Varios"
+    },
+    {
+      "glyph": "∠",
+      "command": "\\angle",
+      "name": "ángulo",
+      "group": "Varios"
+    },
+    {
+      "glyph": "△",
+      "command": "\\triangle",
+      "name": "triángulo",
+      "group": "Varios"
+    }
+  ],
+  "templates": [
+    {
+      "key": "articulo",
+      "title": "Artículo",
+      "description": "Documento corto con secciones, resumen y matemáticas",
+      "filename": "articulo.tex",
+      "body": "\\documentclass[11pt, a4paper]{article}\n\\usepackage[T1]{fontenc}\n\\usepackage[spanish]{babel}\n\\usepackage{amsmath, amssymb, amsthm}\n\\usepackage{graphicx}\n\\usepackage{hyperref}\n\\usepackage[margin=2.5cm]{geometry}\n\n\\title{Título del artículo}\n\\author{Tu nombre}\n\\date{\\today}\n\n\\begin{document}\n\n\\maketitle\n\n\\begin{abstract}\n    Un resumen breve del trabajo.\n\\end{abstract}\n\n\\section{Introducción}\n\nEscribe aquí. Una fórmula en línea: $e^{i\\pi} + 1 = 0$.\n\n\\begin{equation}\n    \\int_{-\\infty}^{\\infty} e^{-x^2} \\, dx = \\sqrt{\\pi}\n    \\label{eq:gauss}\n\\end{equation}\n\n\\section{Desarrollo}\n\nComo muestra la ecuación~\\eqref{eq:gauss}, \\ldots\n\n\\section{Conclusiones}\n\n\\end{document}\n"
+    },
+    {
+      "key": "tarea",
+      "title": "Tarea",
+      "description": "Problemas numerados con encabezado de curso",
+      "filename": "tarea.tex",
+      "body": "\\documentclass[11pt, a4paper]{article}\n\\usepackage[T1]{fontenc}\n\\usepackage[spanish]{babel}\n\\usepackage{amsmath, amssymb, amsthm}\n\\usepackage{graphicx}\n\\usepackage{hyperref}\n\\usepackage[margin=2.5cm]{geometry}\n\\usepackage{enumitem}\n\n\\newcommand{\\problema}[1]{\\section*{Problema #1}}\n\n\\title{Tarea 1 \\\\ \\large Nombre del curso}\n\\author{Tu nombre}\n\\date{\\today}\n\n\\begin{document}\n\n\\maketitle\n\n\\problema{1}\n\nEnunciado del problema.\n\n\\textbf{Solución.} Desarrollo de la solución:\n\\begin{align*}\n    a^2 + b^2 &= c^2 \\\\\n    c &= \\sqrt{a^2 + b^2}\n\\end{align*}\n\n\\problema{2}\n\n\\begin{enumerate}[label=(\\alph*)]\n    \\item Primer inciso.\n    \\item Segundo inciso.\n\\end{enumerate}\n\n\\end{document}\n"
+    },
+    {
+      "key": "informe",
+      "title": "Informe",
+      "description": "Documento largo con capítulos e índice",
+      "filename": "informe.tex",
+      "body": "\\documentclass[12pt, a4paper]{report}\n\\usepackage[T1]{fontenc}\n\\usepackage[spanish]{babel}\n\\usepackage{amsmath, amssymb, amsthm}\n\\usepackage{graphicx}\n\\usepackage{hyperref}\n\\usepackage[margin=2.5cm]{geometry}\n\n\\title{Título del informe}\n\\author{Tu nombre}\n\\date{\\today}\n\n\\begin{document}\n\n\\maketitle\n\\tableofcontents\n\n\\chapter{Introducción}\n\n\\section{Contexto}\n\nTexto del informe.\n\n\\chapter{Metodología}\n\n\\chapter{Resultados}\n\n\\begin{table}[htbp]\n    \\centering\n    \\caption{Una tabla de ejemplo.}\n    \\label{tab:ejemplo}\n    \\begin{tabular}{lcr}\n        \\hline\n        Concepto & Valor & Unidad \\\\\n        \\hline\n        Masa & 1.5 & kg \\\\\n        Tiempo & 20 & s \\\\\n        \\hline\n    \\end{tabular}\n\\end{table}\n\n\\chapter{Conclusiones}\n\n\\end{document}\n"
+    },
+    {
+      "key": "presentacion",
+      "title": "Presentación",
+      "description": "Diapositivas con Beamer",
+      "filename": "presentacion.tex",
+      "body": "\\documentclass[aspectratio=169]{beamer}\n\\usepackage[T1]{fontenc}\n\\usepackage[spanish]{babel}\n\\usepackage{amsmath, amssymb}\n\\usetheme{Madrid}\n\n\\title{Título de la presentación}\n\\author{Tu nombre}\n\\date{\\today}\n\n\\begin{document}\n\n\\begin{frame}\n    \\titlepage\n\\end{frame}\n\n\\begin{frame}\n    \\frametitle{Contenido}\n    \\tableofcontents\n\\end{frame}\n\n\\section{Introducción}\n\n\\begin{frame}\n    \\frametitle{Primera diapositiva}\n    \\begin{itemize}\n        \\item Un punto importante.\n        \\item Otro punto, con fórmula: $E = mc^2$.\n    \\end{itemize}\n\\end{frame}\n\n\\begin{frame}\n    \\frametitle{Un bloque}\n    \\begin{block}{Teorema}\n        Para todo $n > 2$ no existen enteros positivos tales que $a^n + b^n = c^n$.\n    \\end{block}\n\\end{frame}\n\n\\end{document}\n"
+    },
+    {
+      "key": "carta",
+      "title": "Carta",
+      "description": "Carta formal",
+      "filename": "carta.tex",
+      "body": "\\documentclass[11pt, a4paper]{letter}\n\\usepackage[T1]{fontenc}\n\\usepackage[spanish]{babel}\n\n\\signature{Tu nombre}\n\\address{Tu dirección \\\\ Ciudad}\n\n\\begin{document}\n\n\\begin{letter}{Destinatario \\\\ Institución \\\\ Ciudad}\n\n\\opening{Estimado/a:}\n\nCuerpo de la carta.\n\n\\closing{Atentamente,}\n\n\\end{letter}\n\n\\end{document}\n"
+    },
+    {
+      "key": "vacio",
+      "title": "En blanco",
+      "description": "Archivo vacío",
+      "filename": "sin-titulo.tex",
+      "body": ""
+    }
+  ],
+  "environments": {
+    "document": "$0",
+    "itemize": "\\item $0",
+    "enumerate": "\\item $0",
+    "description": "\\item[$0] ",
+    "equation": "$0",
+    "equation*": "$0",
+    "align": "$0",
+    "align*": "$0",
+    "gather": "$0",
+    "gather*": "$0",
+    "multline": "$0",
+    "cases": "$0",
+    "matrix": "$0",
+    "pmatrix": "$0",
+    "bmatrix": "$0",
+    "vmatrix": "$0",
+    "array": "$0",
+    "figure": "\\centering\n\\includegraphics[width=0.8\\linewidth]{$0}\n\\caption{}\n\\label{fig:}",
+    "table": "\\centering\n\\caption{$0}\n\\label{tab:}\n\\begin{tabular}{lcr}\n    \\hline\n     &  &  \\\\\n    \\hline\n\\end{tabular}",
+    "tabular": "$0",
+    "center": "$0",
+    "flushleft": "$0",
+    "flushright": "$0",
+    "abstract": "$0",
+    "quote": "$0",
+    "verbatim": "$0",
+    "lstlisting": "$0",
+    "minipage": "$0",
+    "theorem": "$0",
+    "lemma": "$0",
+    "proof": "$0",
+    "definition": "$0",
+    "frame": "\\frametitle{$0}",
+    "columns": "$0",
+    "block": "$0",
+    "tikzpicture": "$0",
+    "thebibliography": "\\bibitem{$0} "
+  },
+  "env_args": {
+    "tabular": "{lcr}",
+    "array": "{lcr}",
+    "figure": "[htbp]",
+    "table": "[htbp]",
+    "minipage": "{0.5\\linewidth}",
+    "thebibliography": "{99}",
+    "block": "{Título}"
+  },
+  "list_envs": [
+    "description",
+    "enumerate",
+    "itemize"
+  ]
+}

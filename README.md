@@ -1,0 +1,193 @@
+# MiyuLaTeX
+
+Editor de LaTeX, Markdown y código escrito en Rust. Abre una ventana gráfica
+con egui, texto monoespaciado, paneles rectangulares y bordes finos. Incluye
+compilación LaTeX, vista previa de Markdown y un visor de PDF e imágenes.
+
+![Ventana de MiyuLaTeX](docs/captura-rust.png)
+
+## Ejecutar
+
+```sh
+cargo run --release
+cargo run --release -- articulo.tex
+cargo run --release -- README.md
+cargo run --release -- src/main.rs
+cargo run --release -- articulo.pdf
+```
+
+Estos comandos abren una ventana. También puedes crear la app macOS y abrirla
+desde Finder, sin usar una terminal:
+
+```sh
+sh scripts/package-macos.sh
+open dist/MiyuLaTeX.app
+```
+
+El paquete incluye el icono de `assets/icon.png`, convertido a
+`assets/icon.icns`. Puedes copiar `dist/MiyuLaTeX.app` a Aplicaciones.
+
+Para compilar documentos LaTeX necesitas un motor LaTeX. Miyu detecta `tectonic`, `latexmk`, `pdflatex`,
+`xelatex` y `lualatex`, en ese orden. Puedes elegir uno en Preferencias.
+
+```sh
+brew install tectonic
+```
+
+Para `biblatex` con `backend=biber`, Tectonic 0.17 exige biber 2.17, que
+corresponde a su biblatex 3.17. El de Homebrew es más nuevo y no sirve. Pon el
+binario de la [versión 2.17](https://sourceforge.net/projects/biblatex-biber/files/biblatex-biber/2.17/binaries/)
+en `~/.config/miyulatex/bin/biber`. Miyu busca ahí antes que en el `PATH`. En
+macOS reciente el binario universal no arranca; extrae tu arquitectura con
+`lipo biber -thin arm64 -output biber`.
+
+Con Tectonic, Miyu lee el registro de LaTeX y el de biber para mostrar las
+citas y referencias sin resolver, con el archivo y la línea donde aparecen.
+
+## Uso
+
+Abre una carpeta de proyecto o un archivo desde Archivo. También puedes
+arrastrarlos a la ventana. Los archivos y el esquema están a la izquierda,
+las pestañas del editor en el centro y la vista previa a la derecha. Los
+problemas de compilación abren el archivo en la línea correspondiente.
+
+Markdown tiene vista previa mientras escribes, tablas, listas de tareas,
+enlaces, imágenes locales y bloques de código. El esquema muestra los títulos
+y permite saltar a ellos. Los enlaces a otros archivos locales abren una
+pestaña. `Cmd+B` y `Cmd+I` insertan el formato de Markdown. Enter continúa las
+listas y deja una casilla nueva sin marcar.
+
+Los archivos de código usan las gramáticas de Syntect para resaltado. Incluye
+Rust, Python, JavaScript, C, C++, Java, Go, SQL, HTML, CSS, JSON y YAML, entre
+otros. `Cmd+/` usa los comentarios del lenguaje cuando tiene un marcador
+definido. JSON no admite comentarios. Los archivos UTF-8 sin una gramática
+conocida se editan como texto. Guardar como conserva la extensión y cambia el
+resaltado según el nuevo nombre. Se conservan los saltos de línea de Windows.
+
+Los PDF se abren en pestañas de solo lectura, con navegación por página, zoom,
+recarga y acceso al visor del sistema. Cada pestaña conserva su página y su
+zoom. También puedes ver PNG, JPEG, WebP, GIF y BMP. La compilación automática
+solo se aplica a LaTeX. PDF e imágenes no pasan por el guardado de texto.
+
+El diálogo Nuevo permite crear Markdown, texto, código Python o Rust, además
+de las plantillas LaTeX. Abre y guarda otros lenguajes con su extensión.
+
+| Tecla en macOS | Acción |
+| --- | --- |
+| `Cmd+N` | Nuevo documento desde plantilla |
+| `Cmd+O` | Abrir archivo con el diálogo del sistema |
+| `Cmd+S` / `Cmd+Shift+S` | Guardar / guardar como |
+| `Cmd+W` / `Ctrl+Tab` | Cerrar / cambiar pestaña |
+| `F5` / `Cmd+R` | Guardar los documentos LaTeX y compilar |
+| `F6` | Abrir el PDF en el visor del sistema |
+| `F2` / `F3` / `F4` | Mostrar archivos, vista previa o problemas |
+| `Cmd+F` / `Cmd+G` | Buscar y reemplazar / ir a línea |
+| `Cmd+T` | Insertar un símbolo LaTeX |
+| `Cmd+B` / `Cmd+I` / `Cmd+/` | Negrita, cursiva o comentar líneas |
+| `Cmd+Z` / `Cmd+Shift+Z` | Deshacer / rehacer |
+| `Cmd+C` / `Cmd+X` / `Cmd+V` | Copiar, cortar y pegar |
+| `Cmd+P` / `Cmd+,` | Preferencias |
+| `F1` / `Cmd+Q` | Ayuda / salir |
+
+En otras plataformas, usa `Ctrl` en lugar de `Cmd`.
+
+En archivos LaTeX, el editor resalta la sintaxis, cierra pares y conserva la sangría. Autocompleta 186
+comandos, 37 entornos, etiquetas y citas. `Tab` acepta una sugerencia.
+`\begin{` permite insertar el cuerpo y el cierre del entorno. Hay seis
+plantillas y 101 símbolos en los catálogos integrados.
+
+La compilación y el renderizado del PDF corren en hilos separados. Hay un
+límite de 240 segundos para compilar. Se respeta `% !TEX root = ../main.tex`.
+El guardado escribe en un archivo temporal y lo renombra al terminar. Si otro
+programa cambia el archivo, Miyu rechaza el guardado para evitar sobrescribirlo.
+Al cerrar un documento modificado, pide guardar o descartar los cambios.
+
+## Proyectos LaTeX
+
+Archivo importa y exporta el proyecto como ZIP, compatible con Overleaf, y
+exporta el PDF compilado. Añadir archivos copia imágenes, bibliografías u
+otros fuentes a la carpeta del proyecto.
+
+El panel Referencias lista las etiquetas y las citas de todo el proyecto para
+insertarlas con `\ref` o `\cite`. Insertar tiene asistentes de tabla y figura,
+además de los entornos del catálogo. Buscar en el proyecto recorre todos los
+fuentes y abre cada resultado en su línea.
+
+El menú LaTeX permite detener la compilación, recompilar desde cero, compilar
+al dejar de escribir y guardar automáticamente. Contar palabras usa `texcount`
+si está instalado y, si no, una estimación propia. Con `synctex` instalado,
+Mostrar esta línea en el PDF lleva del código a la página, y desde el PDF se
+vuelve a la línea de origen.
+
+Cada guardado deja una versión en `~/.config/miyulatex/history`. Historial del
+archivo muestra las últimas 100 y restaura cualquiera en el editor.
+
+## Personalización
+
+Preferencias tiene dos secciones plegables, Editor y Apariencia.
+
+Editor permite elegir la fuente entre todas las familias instaladas en el
+equipo, con buscador y filtro de monoespaciadas, o desde un archivo TTF, OTF
+o TTC. También ajusta el tamaño del código, el interlineado y los espacios
+por sangría. También muestra u oculta los números de línea, resalta la línea
+actual, activa el cierre de pares y las sugerencias, y ajusta la espera antes
+de compilar.
+
+Apariencia cambia el tamaño del texto de la interfaz y el redondeo de las
+esquinas. Los colores propios sustituyen el primario, el secundario, el
+acento, el fondo y el texto del tema elegido. Con una foto de fondo puedes
+ajustar el tamaño del punto y la sombra bajo el texto, que mantiene legible
+el código sobre la foto en temas claros y oscuros.
+
+## Fondo tramado
+
+En Preferencias puedes elegir una foto, ajustar la intensidad, usar sus
+colores como tema y alternar entre tramado y liso.
+
+El tramado usa la fórmula de `BetterThanEminus/src/bg.js`, con matriz Bayer
+8 por 8, luminancia ponderada, contraste contra el fondo, atenuación vertical
+y redondeo del canvas. La ventana dibuja puntos de dos píxeles lógicos,
+también en Retina, y usa muestreo Nearest para conservarlos. El encuadre
+cubre el 95 % de la altura.
+
+La prueba de referencia compara 1.292 píxeles de temas claros y oscuros en
+ambos estilos. Para regenerarla desde el proyecto de referencia:
+
+```sh
+node tests/tramado_reference.mjs ../BetterThanEminus/src/bg.js
+cargo test matches_better_than_eminus
+```
+
+## Desarrollo
+
+Las preferencias viven en `~/.config/miyulatex/config.json`. Se respeta
+`XDG_CONFIG_HOME` y se conserva el formato de la versión Python. Los fondos se
+copian a la subcarpeta `backgrounds`. La versión anterior está en `python/`.
+El ejecutable Rust no necesita Python.
+
+```sh
+cargo test
+cargo clippy --all-targets -- -D warnings
+```
+
+Las pruebas de integración de egui simulan edición Unicode, deshacer, pares,
+autocompletado, guardado y protección de cambios externos. También verifican
+Markdown, comentarios de código, apertura de PDF e imágenes, navegación de
+páginas y protección de archivos binarios. Si Tectonic está
+instalado, también compila un documento real y verifica el PDF de la ventana.
+
+Puedes rasterizar fuera de la interfaz para revisar resultados:
+
+```sh
+miyu --render-pdf documento.pdf pagina.png 1
+miyu --render-background foto.png fondo.png 1280 800 2 1 16131f dither
+```
+
+`app.rs` dibuja la ventana y maneja los eventos. `editor.rs` edita texto,
+`highlight.rs` resalta LaTeX, `syntax.rs` mantiene el resaltado por líneas y
+`layout.rs` maqueta solo las que cambian. `format.rs` detecta formatos y extrae
+el esquema de Markdown, `latex.rs` reúne fuentes, etiquetas, citas, historial y
+ZIP del proyecto, `compiler.rs` compila, lee problemas y llama a SyncTeX,
+`preview.rs` rasteriza el PDF, `backdrop.rs` trama la foto, `theme.rs` define
+los temas, `custom.rs` aplica la personalización y `config.rs` guarda
+preferencias. `snippets.json` conserva los catálogos de la versión Python.

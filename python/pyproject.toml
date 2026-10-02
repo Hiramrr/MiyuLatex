@@ -1,0 +1,33 @@
+[project]
+name = "miyulatex"
+version = "0.1.0"
+description = "Editor de LaTeX para la terminal, con compilación y vista previa de PDF"
+readme = "README.md"
+authors = [
+    { name = "hiramrr", email = "sasuke_77.23@hotmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "pillow>=12.3.0",
+    "pypdfium2>=5.13.0",
+    "textual>=8.2.8",
+    "textual-image>=0.14.1",
+]
+
+[project.scripts]
+miyu = "miyulatex:main"
+miyulatex = "miyulatex:main"
+
+[build-system]
+requires = ["uv_build>=0.11.12,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
