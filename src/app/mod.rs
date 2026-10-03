@@ -29,7 +29,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[path = "workspace.rs"]
 mod workspace;
 
 /// Buscar el archivo principal lee disco: se recuerda mientras no cambie
@@ -3889,7 +3888,7 @@ fn list_row_height(ui: &egui::Ui) -> f32 {
 }
 
 pub fn run(target: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
-    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))?;
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../../assets/icon.png"))?;
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1280.0, 820.0])
