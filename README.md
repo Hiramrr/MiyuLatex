@@ -79,6 +79,12 @@ definido. JSON no admite comentarios. Los archivos UTF-8 sin una gramática
 conocida se editan como texto. Guardar como conserva la extensión y cambia el
 resaltado según el nuevo nombre. Se conservan los saltos de línea de Windows.
 
+El árbol de archivos muestra logos por formato y lenguaje, con variantes para
+temas claros. Reconoce también nombres como `Dockerfile`, `Cargo.toml` y
+`CMakeLists.txt`, y extensiones compuestas como `.d.ts`. Los iconos de
+[Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme)
+están incluidos en la aplicación. Su licencia está en `assets/file-icons-LICENSE.txt`.
+
 El editor detecta la sangría del archivo y la usa al pulsar Tab o Enter.
 Mayús+Tab quita un nivel. Las guías de sangría se activan en Preferencias.
 El esquema lista funciones, clases y tipos. El completado es local y depende

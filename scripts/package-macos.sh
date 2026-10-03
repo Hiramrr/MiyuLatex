@@ -13,6 +13,7 @@ mkdir -p "$contents/MacOS" "$contents/Resources"
 rm -f "$contents/MacOS/MiyuLaTeX"
 cp target/release/miyu "$contents/MacOS/MiyuLaTeX"
 cp assets/icon.icns "$contents/Resources/icon.icns"
+cp assets/file-icons-LICENSE.txt "$contents/Resources/file-icons-LICENSE.txt"
 rm -f "$contents/Resources/miyu" "$contents/Resources/MiyuLaTeX.command"
 
 cat > "$contents/Info.plist" <<EOF

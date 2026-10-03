@@ -1,249 +1,97 @@
-//! Iconos de la lista de archivos: uno por tipo, dibujados con trazos en los colores del tema.
+//! Logos de archivos incluidos en una textura, con variantes para temas claros.
 
-use std::f32::consts::TAU;
-use std::path::Path;
+use std::{collections::HashMap, path::Path, sync::OnceLock};
 
-use eframe::egui::{self, Painter, Pos2, Rect, Shape, Stroke, StrokeKind, vec2};
+use eframe::egui::{self, Color32, Painter, Pos2, Rect, Stroke, StrokeKind, vec2};
+use serde::Deserialize;
 
 use crate::theme::{Theme, col};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Kind {
-    Tex,
-    Package,
-    Drawing,
-    Bibliography,
-    Pdf,
-    Image,
-    Markdown,
-    Code,
-    Styles,
-    Shell,
-    Data,
-    Settings,
-    Table,
-    Text,
+#[derive(Deserialize)]
+struct Associations {
+    extensions: HashMap<String, usize>,
+    names: HashMap<String, usize>,
 }
 
-fn kind(path: &Path) -> Kind {
-    // El nombre manda sobre la extensión: `CMakeLists.txt` no es una nota.
-    match path.file_name().and_then(|s| s.to_str()) {
-        Some("Makefile" | "Dockerfile" | "CMakeLists.txt") => return Kind::Settings,
-        Some("LICENSE") => return Kind::Text,
-        _ => {}
-    }
-    let extension = path
-        .extension()
-        .map(|e| e.to_string_lossy().to_lowercase())
-        .unwrap_or_default();
-    match extension.as_str() {
-        "tex" | "ltx" => Kind::Tex,
-        "sty" | "cls" => Kind::Package,
-        "tikz" | "svg" => Kind::Drawing,
-        "bib" | "bst" => Kind::Bibliography,
-        "pdf" => Kind::Pdf,
-        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" => Kind::Image,
-        "md" | "markdown" | "mdown" | "mkd" => Kind::Markdown,
-        "css" | "scss" | "sass" | "less" => Kind::Styles,
-        "sh" | "bash" | "zsh" | "fish" | "bat" | "ps1" => Kind::Shell,
-        "json" | "yaml" | "yml" | "xml" => Kind::Data,
-        "toml" | "ini" | "conf" | "cfg" => Kind::Settings,
-        "csv" | "tsv" => Kind::Table,
-        "txt" | "log" => Kind::Text,
-        // Lo demás que llega a la lista es código que syntect reconoce.
-        _ => Kind::Code,
-    }
+#[derive(Deserialize)]
+struct Catalog {
+    columns: usize,
+    rows: usize,
+    file: usize,
+    #[serde(flatten)]
+    base: Associations,
+    light: Associations,
 }
 
-/// Dibuja el icono de `path` en una caja de 14 × 14 puntos centrada en `center`.
+fn catalog() -> &'static Catalog {
+    static CATALOG: OnceLock<Catalog> = OnceLock::new();
+    CATALOG.get_or_init(|| {
+        serde_json::from_str(include_str!("../assets/file-icons.json"))
+            .expect("Catálogo de iconos incluido en la aplicación")
+    })
+}
+
+fn icon(path: &Path, dark: bool) -> usize {
+    let catalog = catalog();
+    let name = path.to_string_lossy().replace('\\', "/").to_lowercase();
+    // El nombre manda sobre la extensión, incluso .github/funding.yml.
+    let mut filename = name.as_str();
+    loop {
+        let named = (!dark)
+            .then(|| catalog.light.names.get(filename))
+            .flatten()
+            .or_else(|| catalog.base.names.get(filename));
+        if let Some(index) = named {
+            return *index;
+        }
+        let Some((_, rest)) = filename.split_once('/') else {
+            break;
+        };
+        filename = rest;
+    }
+    // Empieza por el sufijo más largo: d.ts, test.js, tar.gz, etc.
+    let mut suffix = filename;
+    while let Some((_, extension)) = suffix.split_once('.') {
+        let found = (!dark)
+            .then(|| catalog.light.extensions.get(extension))
+            .flatten()
+            .or_else(|| catalog.base.extensions.get(extension));
+        if let Some(index) = found {
+            return *index;
+        }
+        suffix = extension;
+    }
+    catalog.file
+}
+
+fn uv(index: usize) -> Rect {
+    let catalog = catalog();
+    let x = (index % catalog.columns) as f32 / catalog.columns as f32;
+    let y = (index / catalog.columns) as f32 / catalog.rows as f32;
+    Rect::from_min_size(
+        egui::pos2(x, y),
+        vec2(1.0 / catalog.columns as f32, 1.0 / catalog.rows as f32),
+    )
+}
+
+/// Dibuja el logo en 16 × 16 puntos. egui conserva la textura entre cuadros.
 pub fn file(painter: &Painter, center: Pos2, path: &Path, theme: &Theme) {
-    let kind = kind(path);
-    let color = col(match kind {
-        Kind::Tex | Kind::Package => theme.secondary,
-        Kind::Bibliography | Kind::Data => theme.warning,
-        Kind::Pdf => theme.error,
-        Kind::Image | Kind::Shell | Kind::Table => theme.success,
-        Kind::Markdown | Kind::Drawing | Kind::Styles => theme.accent,
-        Kind::Code => theme.primary,
-        Kind::Settings | Kind::Text => theme.muted(),
-    });
-    let stroke = Stroke::new(1.2, color);
-    let soft = Stroke::new(1.0, color.gamma_multiply(0.7));
-    let at = |(x, y): (f32, f32)| center + vec2(x, y);
-    let points = |list: &[(f32, f32)]| list.iter().copied().map(at).collect::<Vec<_>>();
-    let line = |list: &[(f32, f32)], stroke: Stroke| {
-        painter.add(Shape::line(points(list), stroke));
-    };
-    let closed = |list: &[(f32, f32)]| {
-        painter.add(Shape::closed_line(points(list), stroke));
-    };
-    let frame = |half: (f32, f32)| {
+    let rect = Rect::from_center_size(center, vec2(16.0, 16.0));
+    if let Ok(egui::load::TexturePoll::Ready { texture }) =
+        egui::include_image!("../assets/file-icons.png").load(
+            painter.ctx(),
+            egui::TextureOptions::LINEAR,
+            egui::load::SizeHint::default(),
+        )
+    {
+        painter.image(texture.id, rect, uv(icon(path, theme.dark)), Color32::WHITE);
+    } else {
         painter.rect_stroke(
-            Rect::from_center_size(center, vec2(half.0, half.1) * 2.0),
-            1.5,
-            stroke,
+            rect.shrink2(vec2(3.0, 1.0)),
+            1.0,
+            Stroke::new(1.2, col(theme.muted())),
             StrokeKind::Inside,
         );
-    };
-    // Una hoja con la esquina doblada, desplazada `dx` puntos.
-    let sheet = |dx: f32| {
-        closed(&[
-            (dx - 5.0, -6.5),
-            (dx + 1.5, -6.5),
-            (dx + 5.0, -3.0),
-            (dx + 5.0, 6.5),
-            (dx - 5.0, 6.5),
-        ]);
-    };
-    match kind {
-        // El logotipo de TeX: la E baja de la línea.
-        Kind::Tex => {
-            line(&[(-7.0, -4.0), (-2.0, -4.0)], stroke);
-            line(&[(-4.5, -4.0), (-4.5, 3.0)], stroke);
-            line(
-                &[(1.0, -0.5), (-2.0, -0.5), (-2.0, 5.5), (1.0, 5.5)],
-                stroke,
-            );
-            line(&[(-2.0, 2.5), (0.5, 2.5)], stroke);
-            line(&[(2.8, -4.0), (6.8, 3.0)], stroke);
-            line(&[(6.8, -4.0), (2.8, 3.0)], stroke);
-        }
-        // Un paquete: la caja vista desde una esquina.
-        Kind::Package => {
-            closed(&[
-                (0.0, -6.5),
-                (5.6, -3.2),
-                (5.6, 3.2),
-                (0.0, 6.5),
-                (-5.6, 3.2),
-                (-5.6, -3.2),
-            ]);
-            line(&[(-5.6, -3.2), (0.0, 0.0), (5.6, -3.2)], soft);
-            line(&[(0.0, 0.0), (0.0, 6.5)], soft);
-        }
-        // Una curva con sus dos anclas, como en un programa de dibujo.
-        Kind::Drawing => {
-            painter.add(egui::epaint::CubicBezierShape::from_points_stroke(
-                [(-4.5, 4.5), (-4.5, -5.0), (4.5, 5.0), (4.5, -4.5)].map(at),
-                false,
-                egui::Color32::TRANSPARENT,
-                stroke,
-            ));
-            for anchor in [(-4.5, 4.5), (4.5, -4.5)] {
-                painter.rect_filled(
-                    Rect::from_center_size(at(anchor), vec2(3.6, 3.6)),
-                    0.8,
-                    color,
-                );
-            }
-        }
-        // Un libro abierto.
-        Kind::Bibliography => {
-            closed(&[
-                (0.0, -4.0),
-                (-6.5, -5.5),
-                (-6.5, 4.0),
-                (0.0, 5.5),
-                (6.5, 4.0),
-                (6.5, -5.5),
-            ]);
-            line(&[(0.0, -4.0), (0.0, 5.5)], stroke);
-            for y in [-2.0, 0.8] {
-                line(&[(-4.3, y - 0.6), (-2.2, y)], soft);
-                line(&[(2.2, y), (4.3, y - 0.6)], soft);
-            }
-        }
-        // La hoja con su etiqueta.
-        Kind::Pdf => {
-            sheet(1.5);
-            painter.rect_filled(
-                Rect::from_min_max(at((-7.0, 0.0)), at((3.5, 4.5))),
-                1.0,
-                color,
-            );
-        }
-        // Un paisaje enmarcado.
-        Kind::Image => {
-            frame((6.5, 5.5));
-            painter.circle_filled(at((-3.0, -2.2)), 1.3, color);
-            line(
-                &[(-5.3, 3.6), (-1.8, 0.2), (0.6, 2.4), (2.6, 0.2), (5.3, 3.2)],
-                stroke,
-            );
-        }
-        // La marca de Markdown: la M y la flecha.
-        Kind::Markdown => {
-            frame((7.0, 5.0));
-            line(
-                &[
-                    (-4.6, 2.4),
-                    (-4.6, -2.4),
-                    (-2.5, 0.2),
-                    (-0.4, -2.4),
-                    (-0.4, 2.4),
-                ],
-                stroke,
-            );
-            line(&[(3.4, -2.4), (3.4, 2.2)], stroke);
-            line(&[(1.6, 0.4), (3.4, 2.4), (5.2, 0.4)], stroke);
-        }
-        Kind::Code => {
-            line(&[(-3.2, -3.5), (-6.5, 0.0), (-3.2, 3.5)], stroke);
-            line(&[(3.2, -3.5), (6.5, 0.0), (3.2, 3.5)], stroke);
-            line(&[(1.3, -5.0), (-1.3, 5.0)], soft);
-        }
-        Kind::Styles => {
-            line(&[(-1.6, -5.5), (-3.0, 5.5)], stroke);
-            line(&[(3.0, -5.5), (1.6, 5.5)], stroke);
-            line(&[(-5.5, -2.0), (5.8, -2.0)], stroke);
-            line(&[(-5.8, 2.0), (5.5, 2.0)], stroke);
-        }
-        // Una terminal con su indicador.
-        Kind::Shell => {
-            frame((7.0, 5.5));
-            line(&[(-4.2, -2.2), (-1.8, 0.0), (-4.2, 2.2)], stroke);
-            line(&[(0.4, 2.4), (4.0, 2.4)], stroke);
-        }
-        Kind::Data => {
-            for side in [-1.0, 1.0] {
-                line(
-                    &[
-                        (side * 2.2, -5.5),
-                        (side * 3.8, -4.5),
-                        (side * 3.8, -1.2),
-                        (side * 5.8, 0.0),
-                        (side * 3.8, 1.2),
-                        (side * 3.8, 4.5),
-                        (side * 2.2, 5.5),
-                    ],
-                    stroke,
-                );
-            }
-            painter.circle_filled(center, 1.0, color.gamma_multiply(0.7));
-        }
-        // Un engranaje.
-        Kind::Settings => {
-            for tooth in 0..8 {
-                let (sin, cos) = (tooth as f32 * TAU / 8.0).sin_cos();
-                line(
-                    &[(cos * 3.8, sin * 3.8), (cos * 6.0, sin * 6.0)],
-                    Stroke::new(2.0, color),
-                );
-            }
-            painter.circle_stroke(center, 3.6, Stroke::new(1.5, color));
-        }
-        Kind::Table => {
-            frame((6.5, 5.5));
-            line(&[(-6.0, -1.8), (6.0, -1.8)], stroke);
-            line(&[(-6.0, 1.8), (6.0, 1.8)], soft);
-            line(&[(-1.8, -1.8), (-1.8, 5.0)], soft);
-        }
-        Kind::Text => {
-            sheet(0.0);
-            for y in [-1.0, 2.0] {
-                line(&[(-2.5, y), (2.5, y)], soft);
-            }
-        }
     }
 }
 
@@ -252,29 +100,140 @@ mod tests {
     use super::*;
 
     #[test]
-    fn kinds_by_name_and_extension() {
+    fn logos_by_name_extension_and_theme() {
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("../assets/file-icons.json")).unwrap();
         for (name, expected) in [
-            ("main.tex", Kind::Tex),
-            ("Tesis.TEX", Kind::Tex),
-            ("miyu.sty", Kind::Package),
-            ("figura.tikz", Kind::Drawing),
-            ("refs.bib", Kind::Bibliography),
-            ("main.pdf", Kind::Pdf),
-            ("foto.JPG", Kind::Image),
-            ("README.md", Kind::Markdown),
-            ("main.rs", Kind::Code),
-            ("Gemfile", Kind::Code),
-            ("tema.css", Kind::Styles),
-            ("build.sh", Kind::Shell),
-            ("datos.json", Kind::Data),
-            ("Cargo.toml", Kind::Settings),
-            ("Makefile", Kind::Settings),
-            ("CMakeLists.txt", Kind::Settings),
-            ("datos.csv", Kind::Table),
-            ("notas.txt", Kind::Text),
-            ("LICENSE", Kind::Text),
+            ("main.pdf", "pdf"),
+            ("INFORME.PDF", "pdf"),
+            ("Main.java", "java"),
+            ("main.py", "python"),
+            ("SCRIPT.PYW", "python"),
+            ("main.rs", "rust"),
+            ("Cargo.toml", "rust"),
+            ("Cargo.lock", "rust"),
+            ("main.tex", "tex"),
+            ("Tesis.TEX", "tex"),
+            ("refs.bib", "bibliography"),
+            ("foto.JPG", "image"),
+            ("README.md", "readme"),
+            ("notas.md", "markdown"),
+            ("main.js", "javascript"),
+            ("main.ts", "typescript"),
+            ("types.d.ts", "typescript-def"),
+            ("App.jsx", "react"),
+            ("App.tsx", "react_ts"),
+            ("App.vue", "vue"),
+            ("main.go", "go"),
+            ("main.c", "c"),
+            ("main.cpp", "cpp"),
+            ("main.rb", "ruby"),
+            ("Gemfile", "gemfile"),
+            ("tema.css", "css"),
+            ("build.sh", "console"),
+            ("datos.json", "json"),
+            ("datos.yaml", "yaml"),
+            ("settings.toml", "toml"),
+            ("Dockerfile", "docker"),
+            ("Makefile", "makefile"),
+            ("CMakeLists.txt", "cmake"),
+            ("datos.csv", "table"),
+            ("notas.txt", "document"),
+            ("LICENSE", "license"),
+            ("desconocido.xyzabc", "file"),
+            ("sin_extension", "file"),
         ] {
-            assert_eq!(kind(Path::new(name)), expected, "{name}");
+            assert_eq!(
+                data["icons"][icon(Path::new(name), true)],
+                expected,
+                "{name}"
+            );
         }
+        assert_ne!(
+            icon(Path::new("main.rs"), true),
+            icon(Path::new("main.py"), true)
+        );
+        assert_ne!(
+            icon(Path::new("settings.toml"), true),
+            icon(Path::new("settings.toml"), false)
+        );
+        for (dark, associations) in [(true, &catalog().base), (false, &catalog().light)] {
+            for (name, index) in &associations.names {
+                assert_eq!(icon(Path::new(name), dark), *index, "{name}");
+            }
+            for (extension, index) in &associations.extensions {
+                assert_eq!(
+                    icon(Path::new(&format!("file.{extension}")), dark),
+                    *index,
+                    "{extension}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn embedded_atlas_matches_catalog_and_loads() {
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("../assets/file-icons.json")).unwrap();
+        let cell = data["cell"].as_u64().unwrap() as u32;
+        let image = image::load_from_memory(include_bytes!("../assets/file-icons.png")).unwrap();
+        assert_eq!(image.width(), catalog().columns as u32 * cell);
+        assert_eq!(image.height(), catalog().rows as u32 * cell);
+        for index in 0..data["icons"].as_array().unwrap().len() {
+            assert!(Rect::from_min_max(Pos2::ZERO, egui::pos2(1.0, 1.0)).contains_rect(uv(index)));
+            let x = (index % catalog().columns) as u32 * cell;
+            let y = (index / catalog().columns) as u32 * cell;
+            assert!(
+                image
+                    .crop_imm(x, y, cell, cell)
+                    .to_rgba8()
+                    .pixels()
+                    .any(|pixel| pixel[3] > 0)
+            );
+        }
+        let ctx = egui::Context::default();
+        egui_extras::install_image_loaders(&ctx);
+        let draw = || {
+            ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(100.0, 100.0))),
+                    ..Default::default()
+                },
+                |ui| {
+                    file(
+                        ui.painter(),
+                        egui::pos2(20.0, 20.0),
+                        Path::new("main.py"),
+                        &crate::theme::builtin()[0],
+                    )
+                },
+            )
+        };
+        let mut painted = false;
+        let mut uploaded = false;
+        // El cargador de egui decodifica las imágenes en otro hilo.
+        for _ in 0..200 {
+            let mut output = draw();
+            uploaded |= output.textures_delta.set.values().flatten().any(|delta| {
+                delta.image.size() == [image.width() as usize, image.height() as usize]
+            });
+            output.textures_delta.clear();
+            painted = output
+                .shapes
+                .iter()
+                .any(|shape| matches!(shape.shape, egui::Shape::Mesh(_)));
+            if painted {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            painted && uploaded,
+            "El árbol debe dibujar el logo desde la textura incluida"
+        );
+        let mut cached = draw();
+        let uploads = cached.textures_delta.set.len();
+        cached.textures_delta.clear();
+        assert_eq!(uploads, 0, "La textura se carga una sola vez");
     }
 }
