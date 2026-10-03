@@ -571,4 +571,41 @@ mod tests {
         fs::remove_dir_all(history_directory(&chapter)).unwrap();
         fs::remove_dir_all(dir).unwrap();
     }
+
+    #[test]
+    fn words_positions_and_less_common_commands() {
+        let source = |path: &str, text: &str| Source { path: path.into(), text: text.into() };
+        let document = source(
+            "main.tex",
+            "\\documentclass{article}\n\\title{Sin contar}\n\\begin{document}\nHola mundo, l'été. % comentario aquí\n\\section{Introducción} texto con $x + y$ fórmula \\cite{a} y \\ref{b}.\n\\begin{verbatim}\nno cuenta\n\\end{verbatim}\n\\end{document}",
+        );
+        let bib = source("refs.bib", "@book{a, title = {Muchas palabras aquí}}");
+        assert_eq!(estimated_words(&[document, bib]), 8);
+
+        let labels = labels(&[source("a.tex", "a\n  \\label{uno} \\label{dos}\n\\label{tres}")]);
+        assert_eq!(
+            labels.iter().map(|t| (t.label.as_str(), t.row, t.col)).collect::<Vec<_>>(),
+            [("uno", 1, 2), ("dos", 1, 14), ("tres", 2, 0)]
+        );
+
+        let items = citations(&[source("b.tex", "Texto\n\\bibitem[Pérez]{perez2020} Algo\n\\bibitem{otro}")]);
+        assert_eq!(
+            items.iter().map(|t| (t.label.as_str(), t.row)).collect::<Vec<_>>(),
+            [("perez2020", 1), ("otro", 2)]
+        );
+
+        assert_eq!(table(0, 0, 'x'), "\\begin{tabular}{l}\n\\hline\n$0 \\\\\n\\hline\n\\hline\n\\end{tabular}");
+
+        let dir = std::env::temp_dir().join(format!("miyu-input-{}", std::process::id()));
+        fs::create_dir_all(dir.join("cap")).unwrap();
+        let root = dir.join("main.tex");
+        fs::write(&root, "\\input cap/dos\n\\bibliography{uno, cap/tres}").unwrap();
+        for name in ["cap/dos.tex", "uno.bib", "cap/tres.bib"] {
+            fs::write(dir.join(name), "").unwrap();
+        }
+        let found = sources(&root, &[]);
+        let names: Vec<_> = found.iter().map(|s| s.path.strip_prefix(dir.canonicalize().unwrap()).unwrap().to_owned()).collect();
+        assert_eq!(names, ["main.tex", "cap/dos.tex", "uno.bib", "cap/tres.bib"].map(PathBuf::from));
+        fs::remove_dir_all(dir).unwrap();
+    }
 }
