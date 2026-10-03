@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-latest
+          - os: macos-26
             asset: MiyuLaTeX-macos-arm64.zip
           - os: ubuntu-latest
             asset: miyu-linux-x86_64.tar.gz
@@ -47,6 +47,6 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
-      - run: gh release create "$GITHUB_REF_NAME" MiyuLaTeX-macos-arm64.zip miyu-linux-x86_64.tar.gz --repo "$GITHUB_REPOSITORY" --generate-notes
+      - run: gh release create "$GITHUB_REF_NAME" MiyuLaTeX-macos-arm64.zip miyu-linux-x86_64.tar.gz --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}

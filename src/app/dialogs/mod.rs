@@ -12,6 +12,7 @@ mod settings;
 pub(super) use bib::Citation;
 pub(super) use equation::Equation;
 pub(super) use insert::Table;
+pub(super) use palette::Command;
 pub(super) use palette::Palette;
 pub(super) use project::{History, ProjectSearch, RenameLabel};
 
@@ -71,7 +72,9 @@ impl App {
                         ("O", "Abrir"),
                         ("S", "Guardar"),
                         ("Shift+S", "Guardar como"),
-                        ("R", "Compilar"),
+                        ("R", "Compilar LaTeX o ejecutar código"),
+                        ("Shift+U", "Ejecutar pruebas"),
+                        ("Shift+B", "Comprobar código"),
                         ("F", "Buscar y reemplazar"),
                         ("G", "Ir a línea"),
                         ("Shift+P", "Paleta de comandos"),
@@ -103,7 +106,9 @@ impl App {
                     ui.separator();
                     ui.label("Alt+↑ y Alt+↓ mueven la línea. Tab y Mayús+Tab cambian la sangría.");
                     ui.label("Copiar o cortar sin selección toman la línea entera.");
-                    ui.label("F5 compila. Tab acepta una sugerencia.");
+                    ui.label("F5 compila LaTeX o ejecuta código. Tab acepta una sugerencia.");
+                    ui.label("Ctrl+` abre la terminal; Ctrl+Mayús+` abre otra sesión.");
+                    ui.label("En la terminal, Ctrl+C interrumpe. Arrastra para seleccionar y copia con Cmd+C o Ctrl+Mayús+C. Pega con Cmd+V o Ctrl+Mayús+V.");
                     ui.label("F8 y Mayús+F8 recorren los problemas de la compilación.");
                     ui.label(format!("F12 o {modifier}+clic llevan a la etiqueta, la cita o el archivo señalado."));
                     ui.label("F2, F3 y F4 muestran u ocultan paneles.");

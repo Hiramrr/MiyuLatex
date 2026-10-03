@@ -55,7 +55,7 @@ pub fn tools() -> PathBuf {
     crate::config::directory().join("bin")
 }
 
-fn search_paths() -> Vec<PathBuf> {
+pub(crate) fn search_paths() -> Vec<PathBuf> {
     let mut paths: Vec<_> =
         std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).collect();
     paths.extend(["/Library/TeX/texbin", "/opt/homebrew/bin", "/usr/local/bin"].map(PathBuf::from));

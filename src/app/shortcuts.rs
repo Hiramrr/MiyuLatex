@@ -8,6 +8,27 @@ impl App {
     }
     pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
         let cmd = Modifiers::COMMAND;
+        if Self::shortcut(ctx, Modifiers::CTRL | Modifiers::SHIFT, Key::Backtick) {
+            self.new_terminal(ctx);
+        } else if Self::shortcut(ctx, Modifiers::CTRL, Key::Backtick) {
+            self.toggle_terminal(ctx);
+        }
+        if Self::shortcut(ctx, cmd | Modifiers::SHIFT, Key::U) {
+            self.run_task_kind(developer::TaskKind::Test, ctx);
+        }
+        if Self::shortcut(ctx, cmd | Modifiers::SHIFT, Key::B) {
+            self.run_task_kind(developer::TaskKind::Check, ctx);
+        }
+        // Ctrl+R, Ctrl+W, Tab y las demás teclas pertenecen a la shell con foco.
+        if self.terminal_focused(ctx) {
+            if Self::shortcut(ctx, cmd | Modifiers::SHIFT, Key::P) {
+                self.open_palette();
+            }
+            if cfg!(target_os = "macos") && Self::shortcut(ctx, cmd, Key::Q) {
+                self.request_close(Pending::Quit, ctx);
+            }
+            return;
+        }
         // Los atajos con Mayús van antes: sin ella coinciden también los simples.
         if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::F) {
             self.search.open = true;
@@ -39,7 +60,11 @@ impl App {
             self.request_close(Pending::Quit, ctx);
         }
         if Self::shortcut(ctx, cmd, Key::R) || Self::shortcut(ctx, Modifiers::NONE, Key::F5) {
-            self.compile(false, ctx);
+            if self.editor().format == Format::Latex {
+                self.compile(false, ctx);
+            } else {
+                self.run_task_kind(developer::TaskKind::Run, ctx);
+            }
         }
         if Self::shortcut(ctx, cmd, Key::F) {
             self.start_find();
@@ -84,7 +109,7 @@ impl App {
             self.preferences_changed(ctx);
         }
         if Self::shortcut(ctx, Modifiers::NONE, Key::F4) {
-            self.panel = !self.panel;
+            self.toggle_problems();
         }
         if Self::shortcut(ctx, Modifiers::NONE, Key::F6) {
             self.open_pdf();

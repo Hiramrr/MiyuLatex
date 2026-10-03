@@ -31,10 +31,16 @@ flate2 = "1"
 # El mismo portapapeles que usa egui: aquí solo para leer imágenes.
 arboard = { version = "3.6", default-features = false, features = ["image-data"] }
 zip = { version = "2.4", default-features = false, features = ["deflate"] }
+# PTY del sistema y lectura de secuencias de terminal.
+portable-pty = "0.9"
+vt100 = "0.16"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSSpellChecker"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSSpellChecker", "NSApplication", "NSMenu", "NSMenuItem", "NSEvent", "NSResponder", "NSCell"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSRange", "NSString"] }
 
 [features]

@@ -13,6 +13,11 @@ mkdir -p "$contents/MacOS" "$contents/Resources"
 rm -f "$contents/MacOS/MiyuLaTeX"
 cp target/release/miyu "$contents/MacOS/MiyuLaTeX"
 cp assets/icon.icns "$contents/Resources/icon.icns"
+xcrun actool assets/MiyuTeX.icon --compile "$contents/Resources" \
+    --app-icon MiyuTeX --platform macosx --target-device mac \
+    --minimum-deployment-target 11.0 \
+    --output-partial-info-plist target/miyutex-icon-info.plist \
+    --output-format human-readable-text
 cp assets/file-icons-LICENSE.txt "$contents/Resources/file-icons-LICENSE.txt"
 rm -f "$contents/Resources/miyu" "$contents/Resources/MiyuLaTeX.command"
 
@@ -26,6 +31,7 @@ cat > "$contents/Info.plist" <<EOF
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleExecutable</key><string>MiyuLaTeX</string>
     <key>CFBundleIconFile</key><string>icon.icns</string>
+    <key>CFBundleIconName</key><string>MiyuTeX</string>
     <key>CFBundleShortVersionString</key><string>$app_version</string>
     <key>CFBundleVersion</key><string>$app_version</string>
     <key>NSHighResolutionCapable</key><true/>

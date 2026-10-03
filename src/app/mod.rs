@@ -31,9 +31,12 @@ use std::{
 
 mod appearance;
 mod build;
+mod developer;
 mod dialogs;
 mod documents;
 mod editor_panel;
+#[cfg(target_os = "macos")]
+mod native_menu;
 mod preview_panel;
 mod project;
 mod shortcuts;
@@ -88,6 +91,8 @@ enum ToolResult {
     Back(PathBuf, usize),
 }
 pub struct App {
+    #[cfg(target_os = "macos")]
+    native_menu: Option<native_menu::NativeMenu>,
     config: Config,
     documents: Vec<Document>,
     active: usize,
@@ -138,6 +143,7 @@ pub struct App {
     diagnostics: Vec<Diagnostic>,
     panel: bool,
     log: bool,
+    developer: developer::State,
     settings: bool,
     project_options: bool,
     templates: bool,
@@ -207,6 +213,8 @@ impl App {
             message = format!("No pude cargar el fondo: {e}");
         }
         let mut app = Self {
+            #[cfg(target_os = "macos")]
+            native_menu: None,
             preview: Preview::new(config.invert_preview),
             config,
             documents: Vec::new(),
@@ -252,6 +260,7 @@ impl App {
             diagnostics: Vec::new(),
             panel: false,
             log: false,
+            developer: developer::State::default(),
             settings: false,
             project_options: false,
             templates: false,
@@ -301,10 +310,14 @@ impl App {
         self.paint_background(ui, ui.max_rect());
         self.poll(&ctx);
         self.watch_disk(&ctx);
+        self.poll_terminals(&ctx);
+        self.refresh_tasks();
         if ctx.input(|i| i.viewport().close_requested()) && !self.allow_quit {
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
             self.request_close(Pending::Quit, &ctx);
         }
+        #[cfg(target_os = "macos")]
+        self.native_menus(&ctx);
         if self.pending.is_none() {
             self.shortcuts(&ctx);
         }
@@ -391,6 +404,9 @@ impl App {
             });
         });
         let floor = status.response.rect.top();
+        if self.panel {
+            self.problems(ui);
+        }
         if self.config.show_sidebar {
             self.sidebar(ui);
         }
@@ -400,9 +416,6 @@ impl App {
                 Format::Markdown => self.markdown_panel(ui),
                 _ => {}
             }
-        }
-        if self.panel {
-            self.problems(ui);
         }
         self.editor_panel(ui);
         if self.config.mascot {
@@ -446,7 +459,18 @@ impl eframe::App for App {
 }
 
 impl App {
+    fn has_native_menu(&self) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            self.native_menu.is_some()
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            false
+        }
+    }
     fn shutdown(&mut self) {
+        self.developer.terminals.clear();
         self.remember_session();
         let _ = self.config.save();
         self.cancel.store(true, Ordering::Relaxed);
@@ -480,11 +504,25 @@ fn list_row_height(ui: &egui::Ui) -> f32 {
 
 pub fn run(target: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../../assets/icon.png"))?;
+    // El icono vacío evita que eframe sustituya el icono nativo del paquete.
+    #[cfg(target_os = "macos")]
+    let icon =
+        if std::env::current_exe().is_ok_and(|p| p.to_string_lossy().contains(".app/Contents/")) {
+            egui::IconData::default()
+        } else {
+            icon
+        };
+    let viewport = egui::ViewportBuilder::default()
+        .with_inner_size([1280.0, 820.0])
+        .with_min_inner_size([480.0, 320.0])
+        .with_icon(icon);
+    #[cfg(target_os = "macos")]
+    let viewport = viewport
+        .with_fullsize_content_view(true)
+        .with_title_shown(false)
+        .with_titlebar_shown(false);
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1280.0, 820.0])
-            .with_min_inner_size([480.0, 320.0])
-            .with_icon(icon),
+        viewport,
         // Metal (wgpu) sigue el refresco de la pantalla; con OpenGL los cuadros
         // salían por pares y ProMotion se quedaba en 60 Hz.
         #[cfg(feature = "screenshot")]
@@ -498,9 +536,15 @@ pub fn run(target: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
         options,
         Box::new(move |cc| {
             // Las fuentes se instalan con el tema, en `custom::install_fonts`.
-            Ok(Box::new(
-                App::new(target, &cc.egui_ctx).map_err(std::io::Error::other)?,
-            ))
+            let app = App::new(target, &cc.egui_ctx).map_err(std::io::Error::other)?;
+            #[cfg(target_os = "macos")]
+            let app = {
+                let mut app = app;
+                app.native_menu = Some(native_menu::NativeMenu::new(&cc.egui_ctx));
+                app.native_menus(&cc.egui_ctx);
+                app
+            };
+            Ok(Box::new(app))
         }),
     )?;
     Ok(())

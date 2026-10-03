@@ -26,6 +26,107 @@ fn key(key: Key, modifiers: Modifiers) -> egui::Event {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn developer_task_saves_code_and_keeps_terminal_focus() {
+    let folder = std::env::temp_dir().join(format!("miyu-developer-ui-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("programa ñ.sh");
+    fs::write(&path, "printf OLD\\n\n").unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let mut app = App::new(Some(path.clone()), &ctx).unwrap();
+    app.config.mascot = false;
+    app.backdrop = Backdrop::default();
+    tick(&mut app, &ctx, vec![]);
+    let source = "printf 'READY\\n'; read answer; printf 'DONE=%s\\n' \"$answer\"; exit 5\n";
+    let end = app.editor().end();
+    app.editor_mut().replace(Pos::new(0, 0), end, source);
+    tick(&mut app, &ctx, vec![key(Key::F5, Modifiers::NONE)]);
+    assert_eq!(fs::read_to_string(&path).unwrap(), source);
+    assert!(!app.editor().dirty());
+    assert!(app.compile_rx.is_none());
+    assert!(app.panel && app.developer.selected);
+    assert_eq!(app.developer.terminals.len(), 1);
+    let terminal_id = app.developer.terminals[0].id;
+    tick(&mut app, &ctx, vec![]);
+    assert!(ctx.memory(|m| m.has_focus(terminal_id)));
+    // Tab y Ctrl+R se envían al proceso, sin cambiar el editor ni compilar.
+    tick(&mut app, &ctx, vec![key(Key::Tab, Modifiers::NONE)]);
+    tick(&mut app, &ctx, vec![key(Key::R, Modifiers::CTRL)]);
+    assert!(ctx.memory(|m| m.has_focus(terminal_id)));
+    assert_eq!(app.editor().text(), source);
+    assert_eq!(app.developer.terminals.len(), 1);
+    // Ocultar conserva la PTY; volver a mostrarla recupera el foco.
+    tick(&mut app, &ctx, vec![key(Key::Backtick, Modifiers::CTRL)]);
+    assert!(!app.panel);
+    assert_eq!(app.developer.terminals.len(), 1);
+    tick(&mut app, &ctx, vec![key(Key::Backtick, Modifiers::CTRL)]);
+    tick(&mut app, &ctx, vec![]);
+    assert!(app.terminal_focused(&ctx));
+    tick(
+        &mut app,
+        &ctx,
+        vec![
+            egui::Event::Text("hola".into()),
+            key(Key::Enter, Modifiers::NONE),
+        ],
+    );
+    let start = Instant::now();
+    while app.developer.terminals[0].exit.is_none() {
+        tick(&mut app, &ctx, vec![]);
+        assert!(start.elapsed() < Duration::from_secs(10));
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(
+        app.developer.terminals[0]
+            .exit
+            .as_ref()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .exit_code(),
+        5
+    );
+    app.toggle_problems();
+    assert!(app.panel && !app.developer.selected);
+    tick(&mut app, &ctx, vec![]);
+    // El selector de tareas y las acciones caben con texto grande a 480 px.
+    app.developer.selected = true;
+    app.config.ui_font_size = 22.0;
+    app.apply_theme(&ctx);
+    let mut nodes = Vec::new();
+    for _ in 0..2 {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(480.0, 600.0),
+                )),
+                ..Default::default()
+            },
+            |ui| app.draw(ui),
+        );
+        output.textures_delta.clear();
+        nodes = output.platform_output.accesskit_update.unwrap().nodes;
+    }
+    for label in ["Sesión", "Ejecutar tarea", "Ocultar panel"] {
+        let node = &nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some(label))
+            .unwrap()
+            .1;
+        let bounds = node.bounds().unwrap();
+        assert!(
+            bounds.x0 >= 0.0 && bounds.x1 <= 480.0,
+            "{label}: {bounds:?}"
+        );
+    }
+    app.shutdown();
+    assert!(app.developer.terminals.is_empty());
+    fs::remove_dir_all(folder).unwrap();
+}
+
 #[test]
 fn markdown_code_pdf_images_and_binary_protection() {
     let folder = std::env::temp_dir().join(format!("miyu-multi-{}", std::process::id()));
@@ -549,6 +650,88 @@ fn buttons_keep_their_purpose_across_documents() {
         );
     }
     fs::remove_dir_all(folder).unwrap();
+}
+
+#[test]
+fn pdf_controls_fit_narrow_panels_and_search_opens_on_demand() {
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let mut app = App::new(Some(PathBuf::from(env!("CARGO_MANIFEST_DIR"))), &ctx).unwrap();
+    app.preview.count = 8;
+    app.config.ui_font_size = 22.0;
+    app.apply_theme(&ctx);
+    let frame = |app: &mut App, events| {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(230.0, 600.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ui| app.pdf_view(ui),
+        );
+        output.textures_delta.clear();
+        output.platform_output.accesskit_update.unwrap().nodes
+    };
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    for label in ["Buscar en PDF", "Acciones del PDF"] {
+        let node = &nodes
+            .iter()
+            .find(|(_, n)| n.label() == Some(label))
+            .unwrap()
+            .1;
+        let bounds = node.bounds().unwrap();
+        assert!(
+            bounds.x0 >= 0.0 && bounds.x1 <= 230.0 && bounds.y1 <= 40.0,
+            "{label}: {bounds:?}"
+        );
+    }
+    assert!(
+        !nodes
+            .iter()
+            .any(|(_, n)| n.role() == egui::accesskit::Role::TextInput)
+    );
+    app.focus_pdf_find = true;
+    frame(&mut app, vec![]);
+    assert!(app.pdf().search_open);
+    let nodes = frame(&mut app, vec![]);
+    let close = &nodes
+        .iter()
+        .find(|(_, n)| n.label() == Some("Cerrar búsqueda del PDF"))
+        .unwrap()
+        .1;
+    assert!(close.bounds().unwrap().x1 <= 230.0);
+    frame(&mut app, vec![key(Key::Escape, Modifiers::NONE)]);
+    assert!(!app.pdf().search_open);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn native_menu_shortcuts_respect_text_field_focus() {
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(PathBuf::from(env!("CARGO_MANIFEST_DIR"))), &ctx).unwrap();
+    app.editor_mut().insert("Texto editado");
+    let edited = app.editor().source().to_owned();
+    app.start_find();
+    tick(&mut app, &ctx, vec![]);
+    tick(
+        &mut app,
+        &ctx,
+        vec![native_menu::shortcut_event("Mod+Z").unwrap()],
+    );
+    assert_eq!(app.editor().source(), edited);
+    app.find = false;
+    app.focus_editor = true;
+    tick(&mut app, &ctx, vec![]);
+    tick(
+        &mut app,
+        &ctx,
+        vec![native_menu::shortcut_event("Mod+Z").unwrap()],
+    );
+    assert_ne!(app.editor().source(), edited);
 }
 
 /// Tiempos por cuadro con documentos grandes, en reposo y tecleando:

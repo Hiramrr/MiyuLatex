@@ -23,6 +23,7 @@ mod preview;
 mod spell;
 mod synctex;
 mod syntax;
+mod terminal;
 mod theme;
 use std::io;
 fn main() -> Result<(), Box<dyn std::error::Error>> {

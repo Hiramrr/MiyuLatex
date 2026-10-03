@@ -4,6 +4,10 @@ use super::*;
 
 impl App {
     pub(super) fn toolbar(&mut self, ui: &mut egui::Ui) {
+        if self.has_native_menu() {
+            self.titlebar(ui);
+            return;
+        }
         let ctx = ui.ctx().clone();
         let editable = self.editor().format.editable();
         let latex = self.editor().format == Format::Latex;
@@ -14,7 +18,8 @@ impl App {
         egui::Panel::top("toolbar")
             .frame(egui::Frame::side_top_panel(ui.style()).fill(col(self.theme.surface)).inner_margin(egui::Margin::symmetric(8, 4)))
             .show(ui, |ui| {
-            ui.spacing_mut().button_padding = egui::vec2(8.0, 4.0);
+            ui.spacing_mut().button_padding = egui::vec2(6.0, 2.0);
+            ui.spacing_mut().interact_size.y = 26.0;
             ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
             egui::MenuBar::new().style(|style: &mut egui::Style| {
                 egui::containers::menu::menu_style(style);
@@ -169,7 +174,9 @@ impl App {
                         self.fold_everything(false);
                         ui.close();
                     }
-                    ui.checkbox(&mut self.panel, "Problemas y registro de compilación").on_hover_text("Muestra u oculta los resultados de la última compilación. F4.");
+                    if ui.selectable_label(self.panel && !self.developer.selected, "Problemas y registro de compilación").on_hover_text("Muestra u oculta los resultados de la última compilación. F4.").clicked() {
+                        self.toggle_problems();
+                    }
                     changed |= ui.checkbox(&mut self.config.mascot, "Gatito en la barra de estado").on_hover_text("Muestra u oculta la mascota. Teclea en su portátil mientras escribes, espera la compilación y se duerme si no hay actividad.").changed();
                     changed |= ui.add_enabled(self.config.mascot, egui::Checkbox::new(&mut self.config.mascot_friend, "Cangrejito amigo del gatito")).on_hover_text("Un cangrejito que pasea por la barra de estado y va a saludar al gatito.").changed();
                     changed |= ui.add_enabled(self.config.mascot, egui::Checkbox::new(&mut self.config.mascot_dog, "Schnauzer amigo del gatito")).on_hover_text("Un schnauzer que pasea por la barra de estado, menea la cola y ladra si la compilación falla.").changed();
@@ -185,6 +192,7 @@ impl App {
                     });
                     if changed { self.preferences_changed(&ctx); }
                 });
+                ui.menu_button("Desarrollo", |ui| self.developer_menu(ui));
                 ui.menu_button("Insertar", |ui| {
                     let prose = latex || self.editor().format == Format::Markdown;
                     if action(ui, "Negrita", prose, "Aplica negrita al texto seleccionado o inserta sus marcas. Cmd/Ctrl+B. Disponible en LaTeX y Markdown.").clicked() {
@@ -310,12 +318,17 @@ impl App {
                 if toolbar_action(ui, "Nuevo", "Nuevo documento…", true, "Crea un documento sin guardar. Cmd/Ctrl+N.").clicked() { self.templates = true; }
                 if toolbar_action(ui, "Abrir", "Abrir archivo…", true, "Abre un documento, código, PDF o imagen. Cmd/Ctrl+O.").clicked() { self.open_dialog(); }
                 if toolbar_action(ui, "Guardar", "Guardar", editable, "Guarda la pestaña activa. Cmd/Ctrl+S. PDF e imágenes son de solo lectura.").clicked() { self.save_document(self.active, false); }
+                if toolbar_action(ui, "Terminal", "Mostrar u ocultar terminal", true, "Abre la terminal integrada. Ctrl+`.").clicked() { self.toggle_terminal(&ctx); }
                 ui.separator();
                 if compiling {
                     ui.spinner();
                     if action(ui, "Detener compilación", !self.cancel.load(Ordering::Relaxed), "Detiene la compilación en curso. Espera mientras el motor termina de detenerse.").clicked() {
                         self.cancel.store(true, Ordering::Relaxed);
                         self.message = "Deteniendo la compilación…".into();
+                    }
+                } else if !latex && self.has_task(developer::TaskKind::Run) {
+                    if toolbar_action(ui, "Ejecutar", "Ejecutar código", true, "Guarda y ejecuta código. F5 o Cmd/Ctrl+R.").clicked() {
+                        self.run_task_kind(developer::TaskKind::Run, &ctx);
                     }
                 } else {
                     let response = ui.add_enabled(latex || saved_source, egui::Button::new("Compilar")
@@ -332,6 +345,130 @@ impl App {
                 }
             });
         });
+    }
+
+    fn titlebar(&mut self, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        egui::Panel::top("titlebar")
+            .frame(
+                egui::Frame::new()
+                    .fill(col(self.theme.surface))
+                    .inner_margin(egui::Margin::symmetric(8, 4)),
+            )
+            .show(ui, |ui| {
+                ui.spacing_mut().button_padding = egui::vec2(6.0, 2.0);
+                ui.spacing_mut().interact_size.y = 28.0;
+                ui.spacing_mut().item_spacing.x = 6.0;
+                let drag = ui.interact(
+                    egui::Rect::from_min_size(
+                        ui.cursor().min,
+                        egui::vec2(ui.available_width(), list_row_height(ui)),
+                    ),
+                    Id::new("titlebar_drag"),
+                    egui::Sense::click_and_drag(),
+                );
+                if drag.drag_started() {
+                    ctx.send_viewport_cmd(ViewportCommand::StartDrag);
+                }
+                if drag.double_clicked() {
+                    ctx.send_viewport_cmd(ViewportCommand::Maximized(
+                        !ctx.input(|i| i.viewport().maximized.unwrap_or(false)),
+                    ));
+                }
+                ui.horizontal(|ui| {
+                    // Los botones de macOS siguen siendo nativos, sobre esta fila.
+                    if !ctx.input(|i| i.viewport().fullscreen.unwrap_or(false)) {
+                        ui.add_space(72.0);
+                    }
+                    self.sidebar_toggle(ui);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if toolbar_action(
+                            ui,
+                            "⌘",
+                            "Paleta de comandos",
+                            true,
+                            "Paleta de comandos. Cmd+Mayús+P.",
+                        )
+                        .clicked()
+                        {
+                            self.open_palette();
+                        }
+                        if toolbar_action(
+                            ui,
+                            "Terminal",
+                            "Mostrar u ocultar terminal",
+                            true,
+                            "Terminal integrada. Ctrl+`.",
+                        )
+                        .clicked()
+                        {
+                            self.toggle_terminal(&ctx);
+                        }
+                        if self.compile_rx.is_some() {
+                            if toolbar_action(
+                                ui,
+                                "Detener",
+                                "Detener compilación",
+                                !self.cancel.load(Ordering::Relaxed),
+                                "Detener compilación",
+                            )
+                            .clicked()
+                            {
+                                self.cancel.store(true, Ordering::Relaxed);
+                                self.message = "Deteniendo la compilación…".into();
+                            }
+                            ui.spinner();
+                        } else if self.editor().format != Format::Latex
+                            && self.has_task(developer::TaskKind::Run)
+                        {
+                            if toolbar_action(
+                                ui,
+                                "Ejecutar",
+                                "Ejecutar código",
+                                true,
+                                "Guardar y ejecutar. F5 o Cmd+R.",
+                            )
+                            .clicked()
+                            {
+                                self.run_task_kind(developer::TaskKind::Run, &ctx);
+                            }
+                        } else if (self.editor().format == Format::Latex || self.root().is_some())
+                            && toolbar_action(
+                                ui,
+                                "Compilar",
+                                "Compilar",
+                                true,
+                                "Guardar y compilar. F5 o Cmd+R.",
+                            )
+                            .clicked()
+                        {
+                            self.compile(false, &ctx);
+                        }
+                        if ui.max_rect().width() >= 600.0
+                            && self.editor().format.editable()
+                            && toolbar_action(ui, "Guardar", "Guardar", true, "Guardar. Cmd+S.")
+                                .clicked()
+                        {
+                            self.save_document(self.active, false);
+                        }
+                        if self.tool_rx.is_some() {
+                            ui.spinner();
+                        }
+                        let name = self
+                            .project
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy();
+                        ui.add_sized(
+                            [ui.available_width(), list_row_height(ui)],
+                            egui::Label::new(name.as_ref())
+                                .truncate()
+                                .halign(egui::Align::Min),
+                        )
+                        .on_hover_text(self.project.display().to_string());
+                    });
+                });
+            });
     }
 }
 

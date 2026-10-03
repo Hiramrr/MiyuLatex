@@ -11,10 +11,11 @@ impl App {
                 let mut close = None;
                 egui::Frame::new()
                     .fill(col(self.theme.surface))
-                    .inner_margin(egui::Margin::symmetric(8, 4))
+                    .inner_margin(egui::Margin::symmetric(4, 2))
                     .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
-                        ui.spacing_mut().button_padding = egui::vec2(6.0, 4.0);
+                        ui.spacing_mut().button_padding = egui::vec2(6.0, 2.0);
+                        ui.spacing_mut().interact_size.y = 26.0;
                         ui.spacing_mut().item_spacing.x = 4.0;
                         ScrollArea::horizontal().id_salt("tabs").show(ui, |ui| {
                             ui.horizontal(|ui| {
@@ -52,7 +53,7 @@ impl App {
                 }
                 if self.editor().format == Format::Pdf {
                     egui::Frame::new()
-                        .inner_margin(16.0)
+                        .inner_margin(0.0)
                         .show(ui, |ui| self.pdf_view(ui));
                     return;
                 }

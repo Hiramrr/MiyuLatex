@@ -215,7 +215,12 @@ impl App {
                             }
                         }
                     }
-                    self.panel = !result.ok || !result.problems.is_empty();
+                    if !result.ok || !result.problems.is_empty() {
+                        self.panel = true;
+                        self.developer.selected = false;
+                    } else if !self.developer.selected {
+                        self.panel = false;
+                    }
                     self.diagnostics = result
                         .problems
                         .iter()

@@ -31,155 +31,264 @@ impl App {
     pub(super) fn pdf_view(&mut self, ui: &mut egui::Ui) {
         let count = self.pdf().count;
         let has_pdf = self.pdf_path().is_some();
-        ui.horizontal_wrapped(|ui| {
-            ui.label("PDF");
-            if action(
-                ui,
-                "Anterior",
-                count > 0 && self.pdf().page > 0,
-                "Muestra la página anterior del PDF.",
-            )
-            .clicked()
-            {
-                self.pdf_mut().change_page(-1);
-            }
-            let mut page = if count == 0 { 0 } else { self.pdf().page + 1 };
-            if count == 0 {
-                ui.label("0");
-            } else if ui
-                .add(egui::DragValue::new(&mut page).range(1..=count))
-                .on_hover_text("Número de página. Escribe un número para ir a esa página.")
-                .changed()
-            {
-                self.pdf_mut().go_to(page.saturating_sub(1));
-            }
-            ui.label(format!("/ {count}"));
-            if action(
-                ui,
-                "Siguiente",
-                self.pdf().page + 1 < count,
-                "Muestra la página siguiente del PDF.",
-            )
-            .clicked()
-            {
-                self.pdf_mut().change_page(1);
-            }
-            if self.pdf().loading {
-                ui.spinner();
-            }
-        });
-        ui.horizontal_wrapped(|ui| {
-            let zoom = self.pdf().zoom;
-            let reduce = action(
-                ui,
-                "−",
-                count > 0 && zoom > 50.5,
-                "Reducir zoom. Requiere un PDF cargado y un zoom mayor que 50 %.",
-            );
-            reduce.widget_info(|| {
-                egui::WidgetInfo::labeled(
-                    egui::WidgetType::Button,
-                    reduce.enabled(),
-                    "Reducir zoom",
-                )
-            });
-            if reduce.clicked() {
-                self.pdf_mut().change_zoom(-1);
-            }
-            ui.label(format!("{zoom:.0} %"));
-            let increase = action(
-                ui,
-                "+",
-                count > 0 && zoom < 299.5,
-                "Aumentar zoom. Requiere un PDF cargado y un zoom menor que 300 %.",
-            );
-            increase.widget_info(|| {
-                egui::WidgetInfo::labeled(
-                    egui::WidgetType::Button,
-                    increase.enabled(),
-                    "Aumentar zoom",
-                )
-            });
-            if increase.clicked() {
-                self.pdf_mut().change_zoom(1);
-            }
-            if action(
-                ui,
-                "Ajustar al ancho",
-                count > 0,
-                "Ajusta la página al ancho disponible. Requiere un PDF cargado.",
-            )
-            .clicked()
-            {
-                self.pdf_mut().zoom = 100.0;
-            }
-        });
-        ui.horizontal_wrapped(|ui| {
-            if action(ui, "Abrir en visor externo", has_pdf, "Abre este PDF en el visor del sistema. F6. Abre o compila un PDF primero.").clicked() { self.open_pdf(); }
-            if action(ui, "Exportar PDF…", has_pdf, "Guarda una copia de este PDF en otra ubicación. Requiere un PDF abierto o compilado.").clicked() { self.export_pdf(); }
-            if action(ui, "Mostrar línea en PDF", self.tool_rx.is_none() && self.root().is_some() && has_pdf, "Lleva el PDF a la línea del cursor. Cmd/Ctrl+Mayús+J. Requiere un archivo LaTeX guardado y su PDF.").clicked() { self.sync_to_pdf(ui.ctx()); }
-            if action(ui, "Recargar PDF", has_pdf, "Vuelve a leer este PDF del disco, sin compilar el documento.").clicked()
-                && let Some(path) = self.pdf_path().map(Path::to_path_buf)
-                && let Err(e) = self.pdf_mut().load(&path) { self.message = e; }
-        });
-        ui.horizontal_wrapped(|ui| {
-            ui.label("Buscar");
-            let mut query = self.pdf().query().to_owned();
-            let response = ui.add_enabled(
-                count > 0,
-                TextEdit::singleline(&mut query)
-                    .id_salt("pdf_find")
-                    .hint_text("Texto del PDF")
-                    .return_key(None)
-                    .desired_width(150.0),
-            );
-            if std::mem::take(&mut self.focus_pdf_find) {
-                response.request_focus();
-            }
-            if response.changed() {
-                self.pdf_mut().search(&query);
-            }
-            // Enter sigue buscando sin salir del campo; Mayús indica hacia atrás.
-            let mut step = None;
-            if response.has_focus() && Self::shortcut(ui.ctx(), Modifiers::NONE, Key::Enter) {
-                step = Some(ui.input(|i| i.modifiers.shift));
-            }
-            let (current, total) = self.pdf().found();
-            if action(
-                ui,
-                "Anterior",
-                total > 0,
-                "Va a la coincidencia anterior del PDF. Mayús+Enter. Requiere coincidencias.",
-            )
-            .clicked()
-            {
-                step = Some(true);
-            }
-            if action(
-                ui,
-                "Siguiente",
-                total > 0,
-                "Va a la coincidencia siguiente del PDF. Enter. Requiere coincidencias.",
-            )
-            .clicked()
-            {
-                step = Some(false);
-            }
-            if let Some(backwards) = step {
-                self.pdf_mut().find_next(backwards);
-            }
-            if !query.is_empty() {
-                match current {
-                    _ if total == 0 && self.pdf().reading() => ui.label("Leyendo el texto…"),
-                    _ if total == 0 => {
-                        ui.label(RichText::new("Sin coincidencias").color(col(self.theme.error)))
+        if self.focus_pdf_find {
+            self.pdf_mut().search_open = true;
+        }
+        egui::Frame::new()
+            .fill(col(self.theme.surface))
+            .inner_margin(egui::Margin::symmetric(6, 3))
+            .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.spacing_mut().button_padding = egui::vec2(4.0, 2.0);
+                ui.spacing_mut().interact_size = egui::vec2(24.0, 24.0);
+                ui.spacing_mut().item_spacing = egui::vec2(3.0, 4.0);
+                let wide = ui.available_width() >= 360.0;
+                ui.horizontal(|ui| {
+                    if wide {
+                        ui.label("PDF");
+                        if toolbar::toolbar_action(
+                            ui,
+                            "‹",
+                            "Página anterior",
+                            count > 0 && self.pdf().page > 0,
+                            "Página anterior",
+                        )
+                        .clicked()
+                        {
+                            self.pdf_mut().change_page(-1);
+                        }
                     }
-                    Some(current) => ui.label(format!("{current} de {total}")),
-                    None => ui.label(format!("{total} coincidencias")),
-                };
-            }
-        });
-        ui.separator();
+                    let mut page = if count == 0 { 0 } else { self.pdf().page + 1 };
+                    if ui
+                        .add_enabled(
+                            count > 0,
+                            egui::DragValue::new(&mut page).range(1..=count.max(1)),
+                        )
+                        .on_hover_text("Número de página. Escribe un número para ir a esa página.")
+                        .changed()
+                    {
+                        self.pdf_mut().go_to(page.saturating_sub(1));
+                    }
+                    ui.label(format!("/ {count}"));
+                    if wide
+                        && toolbar::toolbar_action(
+                            ui,
+                            "›",
+                            "Página siguiente",
+                            self.pdf().page + 1 < count,
+                            "Página siguiente",
+                        )
+                        .clicked()
+                    {
+                        self.pdf_mut().change_page(1);
+                    }
+                    ui.menu_button(format!("{:.0} %", self.pdf().zoom), |ui| {
+                        let zoom = self.pdf().zoom;
+                        if action(
+                            ui,
+                            "Reducir zoom",
+                            count > 0 && zoom > 50.5,
+                            "Reduce el tamaño de las páginas.",
+                        )
+                        .clicked()
+                        {
+                            self.pdf_mut().change_zoom(-1);
+                        }
+                        if action(
+                            ui,
+                            "Aumentar zoom",
+                            count > 0 && zoom < 299.5,
+                            "Aumenta el tamaño de las páginas.",
+                        )
+                        .clicked()
+                        {
+                            self.pdf_mut().change_zoom(1);
+                        }
+                        ui.separator();
+                        if action(
+                            ui,
+                            "Ajustar al ancho",
+                            count > 0,
+                            "Ajusta la página al ancho del panel.",
+                        )
+                        .clicked()
+                        {
+                            self.pdf_mut().zoom = 100.0;
+                            ui.close();
+                        }
+                    })
+                    .response
+                    .on_hover_text("Zoom del PDF");
+                    if pdf_search_button(ui, count > 0).clicked() {
+                        self.pdf_mut().search_open = !self.pdf().search_open;
+                        self.focus_pdf_find = self.pdf().search_open;
+                    }
+                    ui.menu_button("…", |ui| {
+                        if !wide {
+                            if action(
+                                ui,
+                                "Página anterior",
+                                count > 0 && self.pdf().page > 0,
+                                "Muestra la página anterior.",
+                            )
+                            .clicked()
+                            {
+                                self.pdf_mut().change_page(-1);
+                            }
+                            if action(
+                                ui,
+                                "Página siguiente",
+                                self.pdf().page + 1 < count,
+                                "Muestra la página siguiente.",
+                            )
+                            .clicked()
+                            {
+                                self.pdf_mut().change_page(1);
+                            }
+                            ui.separator();
+                        }
+                        if action(
+                            ui,
+                            "Abrir en visor externo",
+                            has_pdf,
+                            "Abre este PDF en el visor del sistema. F6.",
+                        )
+                        .clicked()
+                        {
+                            self.open_pdf();
+                            ui.close();
+                        }
+                        if action(
+                            ui,
+                            "Exportar PDF…",
+                            has_pdf,
+                            "Guarda una copia de este PDF.",
+                        )
+                        .clicked()
+                        {
+                            self.export_pdf();
+                            ui.close();
+                        }
+                        if action(
+                            ui,
+                            "Mostrar línea en PDF",
+                            self.tool_rx.is_none() && self.root().is_some() && has_pdf,
+                            "Lleva el PDF a la línea del cursor. Cmd/Ctrl+Mayús+J.",
+                        )
+                        .clicked()
+                        {
+                            self.sync_to_pdf(ui.ctx());
+                            ui.close();
+                        }
+                        if action(
+                            ui,
+                            "Recargar PDF",
+                            has_pdf,
+                            "Vuelve a leer este PDF del disco.",
+                        )
+                        .clicked()
+                        {
+                            if let Some(path) = self.pdf_path().map(Path::to_path_buf)
+                                && let Err(e) = self.pdf_mut().load(&path)
+                            {
+                                self.message = e;
+                            }
+                            ui.close();
+                        }
+                    })
+                    .response
+                    .on_hover_text("Acciones del PDF")
+                    .widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::WidgetType::Button,
+                            true,
+                            "Acciones del PDF",
+                        )
+                    });
+                    if self.pdf().loading {
+                        ui.spinner();
+                    }
+                });
+                if self.pdf().search_open {
+                    ui.horizontal(|ui| {
+                        let mut query = self.pdf().query().to_owned();
+                        let response = ui.add_enabled(
+                            count > 0,
+                            TextEdit::singleline(&mut query)
+                                .id_salt(self.documents[self.active].id.with("pdf_find"))
+                                .hint_text("Buscar en PDF")
+                                .return_key(None)
+                                .desired_width((ui.available_width() - 84.0).max(40.0)),
+                        );
+                        if std::mem::take(&mut self.focus_pdf_find) {
+                            response.request_focus();
+                        }
+                        if response.changed() {
+                            self.pdf_mut().search(&query);
+                        }
+                        let mut step = None;
+                        if response.has_focus()
+                            && Self::shortcut(ui.ctx(), Modifiers::NONE, Key::Enter)
+                        {
+                            step = Some(ui.input(|i| i.modifiers.shift));
+                        }
+                        let (_, total) = self.pdf().found();
+                        if toolbar::toolbar_action(
+                            ui,
+                            "‹",
+                            "Coincidencia anterior",
+                            total > 0,
+                            "Coincidencia anterior. Mayús+Enter.",
+                        )
+                        .clicked()
+                        {
+                            step = Some(true);
+                        }
+                        if toolbar::toolbar_action(
+                            ui,
+                            "›",
+                            "Coincidencia siguiente",
+                            total > 0,
+                            "Coincidencia siguiente. Enter.",
+                        )
+                        .clicked()
+                        {
+                            step = Some(false);
+                        }
+                        if let Some(backwards) = step {
+                            self.pdf_mut().find_next(backwards);
+                        }
+                        if toolbar::toolbar_action(
+                            ui,
+                            "×",
+                            "Cerrar búsqueda del PDF",
+                            true,
+                            "Cerrar búsqueda. Esc.",
+                        )
+                        .clicked()
+                            || ((response.has_focus() || response.lost_focus())
+                                && Self::shortcut(ui.ctx(), Modifiers::NONE, Key::Escape))
+                        {
+                            self.pdf_mut().search_open = false;
+                            self.pdf_mut().search("");
+                            response.surrender_focus();
+                        }
+                    });
+                    if !self.pdf().query().is_empty() {
+                        let (current, total) = self.pdf().found();
+                        match current {
+                            _ if total == 0 && self.pdf().reading() => {
+                                ui.label("Leyendo el texto…")
+                            }
+                            _ if total == 0 => {
+                                ui.colored_label(col(self.theme.error), "Sin coincidencias")
+                            }
+                            Some(current) => ui.label(format!("{current} de {total}")),
+                            None => ui.label(format!("{total} coincidencias")),
+                        };
+                    }
+                }
+            });
         if !self.pdf().error.is_empty() {
             ui.colored_label(col(self.theme.error), &self.pdf().error);
         }
@@ -260,24 +369,48 @@ impl App {
     pub(super) fn problems(&mut self, ui: &mut egui::Ui) {
         egui::Panel::bottom("problems")
             .resizable(true)
-            .default_size(155.0)
-            .min_size(85.0)
+            .default_size(260.0)
+            .min_size(150.0)
+            .max_size((ui.available_height() - 100.0).max(150.0))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.log, false, "Problemas");
-                    ui.selectable_value(&mut self.log, true, "Registro");
+                    if ui
+                        .selectable_label(!self.developer.selected && !self.log, "Problemas")
+                        .clicked()
+                    {
+                        self.developer.selected = false;
+                        self.log = false;
+                    }
+                    if ui
+                        .selectable_label(!self.developer.selected && self.log, "Registro")
+                        .clicked()
+                    {
+                        self.developer.selected = false;
+                        self.log = true;
+                    }
+                    if ui
+                        .selectable_label(self.developer.selected, "Terminal")
+                        .clicked()
+                    {
+                        self.show_terminal(ui.ctx());
+                    }
                     if action(
                         ui,
                         "Ocultar panel",
                         true,
-                        "Oculta problemas y registro. F4 vuelve a mostrarlos.",
+                        "Oculta el panel inferior. Las terminales siguen abiertas.",
                     )
                     .clicked()
                     {
                         self.panel = false;
+                        self.focus_editor = true;
                     }
                 });
                 ui.separator();
+                if self.developer.selected {
+                    self.terminal_panel(ui);
+                    return;
+                }
                 let mut jump = None;
                 ScrollArea::both().id_salt("diagnostics").show(ui, |ui| {
                     if let Some(result) = &self.result {
@@ -330,4 +463,24 @@ impl App {
                 }
             });
     }
+}
+
+fn pdf_search_button(ui: &mut egui::Ui, enabled: bool) -> egui::Response {
+    let response = ui.add_enabled(
+        enabled,
+        egui::Button::new("")
+            .min_size(egui::vec2(24.0, 24.0))
+            .frame_when_inactive(false),
+    );
+    let center = response.rect.center() - egui::vec2(1.5, 1.5);
+    let stroke = Stroke::new(1.5, ui.style().interact(&response).fg_stroke.color);
+    ui.painter().circle_stroke(center, 4.5, stroke);
+    ui.painter().line_segment(
+        [center + egui::vec2(3.0, 3.0), center + egui::vec2(7.0, 7.0)],
+        stroke,
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, "Buscar en PDF")
+    });
+    response.on_hover_text("Buscar en el PDF. Cmd/Ctrl+F en una pestaña PDF.")
 }

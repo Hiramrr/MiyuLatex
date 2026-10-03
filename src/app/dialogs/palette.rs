@@ -46,6 +46,11 @@ pub(in crate::app) enum Command {
     FoldAll,
     UnfoldAll,
     ToggleProblems,
+    ToggleTerminal,
+    NewTerminal,
+    RunCode,
+    TestCode,
+    CheckCode,
     ToggleMascot,
     Bold,
     Italic,
@@ -98,7 +103,7 @@ impl App {
         };
     }
     /// Todas las acciones, en el orden de los menús. `Mod` es Cmd o Ctrl.
-    fn commands(&self) -> Vec<Entry> {
+    pub(in crate::app) fn commands(&self) -> Vec<Entry> {
         let editor = self.editor();
         let editable = editor.format.editable();
         let latex = editor.format == Format::Latex;
@@ -151,7 +156,12 @@ impl App {
                 editable && editor.can_redo(),
                 Command::Redo,
             ),
-            ("Buscar y reemplazar…", "Mod+F", editable, Command::Find),
+            (
+                "Buscar…",
+                "Mod+F",
+                editable || editor.format == Format::Pdf,
+                Command::Find,
+            ),
             ("Ir a línea…", "Mod+G", editable, Command::GotoLine),
             (
                 "Buscar en el proyecto…",
@@ -222,6 +232,31 @@ impl App {
                 "F4",
                 true,
                 Command::ToggleProblems,
+            ),
+            (
+                "Mostrar u ocultar terminal",
+                "Ctrl+`",
+                true,
+                Command::ToggleTerminal,
+            ),
+            ("Nueva terminal", "Ctrl+Shift+`", true, Command::NewTerminal),
+            (
+                "Ejecutar código",
+                if latex { "" } else { "F5" },
+                self.has_task(developer::TaskKind::Run),
+                Command::RunCode,
+            ),
+            (
+                "Ejecutar pruebas",
+                "Mod+Shift+U",
+                self.has_task(developer::TaskKind::Test),
+                Command::TestCode,
+            ),
+            (
+                "Comprobar código",
+                "Mod+Shift+B",
+                self.has_task(developer::TaskKind::Check),
+                Command::CheckCode,
             ),
             (
                 "Mostrar u ocultar el gatito",
@@ -407,7 +442,12 @@ impl App {
             Command::Fold => self.toggle_fold_at_cursor(),
             Command::FoldAll => self.fold_everything(true),
             Command::UnfoldAll => self.fold_everything(false),
-            Command::ToggleProblems => self.panel = !self.panel,
+            Command::ToggleProblems => self.toggle_problems(),
+            Command::ToggleTerminal => self.toggle_terminal(ctx),
+            Command::NewTerminal => self.new_terminal(ctx),
+            Command::RunCode => self.run_task_kind(developer::TaskKind::Run, ctx),
+            Command::TestCode => self.run_task_kind(developer::TaskKind::Test, ctx),
+            Command::CheckCode => self.run_task_kind(developer::TaskKind::Check, ctx),
             Command::ToggleMascot => {
                 self.config.mascot = !self.config.mascot;
                 self.preferences_changed(ctx);

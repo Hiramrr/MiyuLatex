@@ -24,13 +24,24 @@ sh scripts/package-macos.sh
 open dist/MiyuLaTeX.app
 ```
 
-El paquete incluye el icono de `assets/icon.png`, convertido a
-`assets/icon.icns`. Puedes copiar `dist/MiyuLaTeX.app` a Aplicaciones.
+El icono original está en `assets/MiyuTeX.icon`. El empaquetado usa `actool`
+de Xcode para compilarlo con sus apariencias nativas de macOS y conserva
+`assets/icon.icns` como alternativa. `assets/icon.png` se usa al ejecutar con
+Cargo y en otras plataformas. Puedes copiar `dist/MiyuLaTeX.app` a Aplicaciones.
 
 Al publicar una etiqueta `vX.Y.Z`, el flujo `release.yml` de GitHub Actions
 compila la app de macOS (Apple Silicon) y el binario de Linux y los adjunta a
 la versión. La app va firmada solo de forma local, sin certificado de Apple:
 la primera vez hay que abrirla con clic derecho y Abrir.
+
+Puedes descargar la app en [Releases](https://github.com/Hiramrr/MiyuLatex/releases).
+Para publicar otra versión, cambia `version` en `Cargo.toml`, guarda los cambios
+en un commit y sube la etiqueta correspondiente:
+
+```sh
+git tag vX.Y.Z
+git push origin main vX.Y.Z
+```
 
 Para compilar documentos LaTeX necesitas un motor LaTeX. Miyu detecta `tectonic`, `latexmk`, `pdflatex`,
 `xelatex` y `lualatex`, en ese orden. Puedes elegir uno en Preferencias.
@@ -65,10 +76,13 @@ un documento editable, un PDF o una compilación en curso se desactivan cuando
 no están disponibles. Los archivos y el esquema están a la izquierda,
 las pestañas del editor en el centro y la vista previa a la derecha. El menú Ver
 permite ocultar cada panel o pasarlo al otro lado de la ventana. El botón Panel
-muestra u oculta el panel lateral y señala si está abierto. La barra superior
-tiene un fondo sólido y agrupa las acciones de documentos. El menú Proyecto
-reúne la creación, apertura e intercambio de proyectos. La barra se ajusta al
-ancho de la ventana. Los problemas de compilación abren el archivo en su línea.
+muestra u oculta el panel lateral y señala si está abierto. En macOS, los menús
+están en la barra del sistema. La barra de título reúne el proyecto, el panel
+lateral y las acciones de guardar, compilar y abrir la paleta. En ventanas
+estrechas, Guardar sigue disponible en Archivo y con `Cmd+S`. En otras
+plataformas, los menús están dentro de la ventana. El menú Proyecto reúne la
+creación, apertura e intercambio de proyectos. Los problemas de compilación
+abren el archivo en su línea.
 
 La paleta de comandos (`Cmd+Shift+P`) reúne las acciones de los menús. Busca
 por cualquier parte del nombre, con o sin tildes, y muestra el atajo de cada
@@ -148,13 +162,16 @@ Reemplazar todas cambia todas las coincidencias del documento activo y permite
 deshacerlas en un paso. Ambos botones se desactivan si no hay coincidencias.
 
 Los PDF se abren en pestañas de solo lectura. Las páginas van seguidas en una
-columna que se recorre con la rueda o el trackpad. El zoom se ajusta con los
-botones, con el gesto de pellizco o con `Cmd` y la rueda. Ajustar vuelve al
+columna que se recorre con la rueda o el trackpad. Una sola barra reúne el
+número de página, el menú de zoom, la lupa de búsqueda y el menú de acciones.
+Este último permite abrir el visor externo, exportar, recargar y mostrar la
+línea del cursor. El zoom también se ajusta con el gesto de pellizco o con
+`Cmd` y la rueda. Ajustar al ancho, dentro del menú de zoom, vuelve al
 ancho del panel. Cada página se rasteriza a la resolución de la pantalla y solo
 cuando se ve. Al recompilar se conserva la posición. Cada pestaña conserva su
 página y su zoom.
 
-El campo Buscar del visor resalta las coincidencias en todas las páginas, sin
+La lupa abre el campo Buscar del visor, que resalta las coincidencias en todas las páginas, sin
 distinguir mayúsculas ni tildes. Enter y Mayús+Enter van a la siguiente o a la anterior.
 En una pestaña de PDF, `Cmd+F` lleva al campo. Una palabra partida con guion
 al final de una línea se encuentra entera. Arrastrar sobre una página
@@ -218,6 +235,35 @@ límite de 240 segundos para compilar. Se respeta `% !TEX root = ../main.tex`.
 El guardado escribe en un archivo temporal y lo renombra al terminar. Si otro
 programa cambia el archivo, Miyu rechaza el guardado para evitar sobrescribirlo.
 Al cerrar un documento modificado, pide guardar o descartar los cambios.
+
+## Código y terminal
+
+Terminal, en la barra superior o en el menú Desarrollo, abre la shell del sistema
+en la carpeta del proyecto. `Ctrl` y la tecla de acento grave la muestran u
+ocultan. Con Mayús se abre otra sesión. El panel inferior se puede ajustar y
+comparte espacio con Problemas y Registro. Ocultarlo conserva los procesos.
+Cada sesión mantiene su carpeta inicial aunque cambies de proyecto.
+
+La terminal admite colores ANSI, entrada interactiva y 5000 líneas de historial.
+La rueda y Mayús+RePág recorren el historial; escribir vuelve al final.
+Arrastra para seleccionar texto. Copia con `Cmd+C` en macOS o `Ctrl+Shift+C`
+en Linux y Windows, y pega con `Cmd+V` o `Ctrl+Shift+V`. `Ctrl+C` o Interrumpir,
+en Sesión, detienen el programa activo. Limpiar borra la pantalla y el historial.
+Cerrar una sesión detiene su proceso activo; salir cierra todas las terminales.
+
+En código, `F5` o `Cmd+R` guardan los cambios y ejecutan la tarea detectada.
+Desarrollo también permite ejecutar pruebas con `Cmd+Shift+U` y comprobar código
+con `Cmd+Shift+B`. En otras plataformas, usa `Ctrl` en lugar de `Cmd`.
+Cada tarea abre una terminal propia y muestra su código de salida al terminar.
+La lista del panel permite elegir otra tarea y consultar su comando.
+
+Miyu reconoce `cargo run/test/check/build`, `go run/test/vet/build` y los scripts
+de `package.json`, con npm, pnpm, Yarn o Bun según el archivo de bloqueo.
+Ejecutar código elige `dev`, `start` o `serve`; los otros scripts se eligen en
+la lista. Python permite ejecutar el archivo, comprobar su sintaxis y ejecutar
+pruebas de un proyecto con `pyproject.toml`. Usa `.venv` si existe. También
+puedes ejecutar archivos JavaScript, shell y Ruby sin un manifiesto.
+Las herramientas de cada lenguaje deben estar instaladas.
 
 ## Proyectos LaTeX
 

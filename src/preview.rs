@@ -209,6 +209,7 @@ pub struct Preview {
     pub invert: bool,
     pub error: String,
     pub loading: bool,
+    pub search_open: bool,
     sizes: Vec<(f32, f32)>,
     rasters: HashMap<usize, Raster>,
     /// Páginas que no se pudieron rasterizar, con su generación.
@@ -248,6 +249,7 @@ impl Preview {
             invert,
             error: String::new(),
             loading: false,
+            search_open: false,
             sizes: Vec::new(),
             rasters: HashMap::new(),
             broken: HashMap::new(),
