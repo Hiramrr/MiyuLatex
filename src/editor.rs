@@ -1015,16 +1015,29 @@ impl Editor {
             source.text = self.text();
         } else {
             sources.push(Source {
-                path: current_path,
+                path: current_path.clone(),
                 text: self.text(),
             });
         }
+        // El documento activo cambia en cada tecla: su texto limpio sale del
+        // resaltado ya hecho en lugar de tokenizarlo entero otra vez.
+        let own: std::rc::Rc<str> = self
+            .syntax
+            .latex_code(&self.lines)
+            .map_or_else(|| latex::code(&self.text), Into::into);
+        let code_of = |source: &Source| {
+            if source.path == current_path {
+                own.clone()
+            } else {
+                latex::code(&source.text)
+            }
+        };
         if let Some(m) = regex(r"\\(begin|end)\s*\{([a-zA-Z*]*)$").captures(before) {
             let prefix = &m[2];
             let start = self.cursor.col - prefix.chars().count();
             let mut names: Vec<_> = catalog().environments.keys().cloned().collect();
             for source in &sources {
-                for entry in regex(r"\\(?:newenvironment|renewenvironment|newtheorem)\*?\s*\{([^}]+)\}").captures_iter(&latex::code(&source.text)) {
+                for entry in regex(r"\\(?:newenvironment|renewenvironment|newtheorem)\*?\s*\{([^}]+)\}").captures_iter(&code_of(source)) {
                     if !names.iter().any(|name| name == &entry[1]) { names.push(entry[1].into()); }
                 }
             }
@@ -1089,7 +1102,7 @@ impl Editor {
                 self.completions.push(Completion { label: format!("\\{}", c.name), insert: c.snippet.clone(), detail: c.help.clone(), start, kind: "command".into() });
             }
             for source in &sources {
-                for m in regex(r"\\(?:newcommand|renewcommand|providecommand|DeclareMathOperator)\*?\s*\{?\\([a-zA-Z]+)\}?\s*(?:\[(\d+)\])?|\\def\s*\\([a-zA-Z]+)").captures_iter(&latex::code(&source.text)) {
+                for m in regex(r"\\(?:newcommand|renewcommand|providecommand|DeclareMathOperator)\*?\s*\{?\\([a-zA-Z]+)\}?\s*(?:\[(\d+)\])?|\\def\s*\\([a-zA-Z]+)").captures_iter(&code_of(source)) {
                     let name = m.get(1).or_else(|| m.get(3)).unwrap().as_str();
                     let label = format!("\\{name}");
                     if name.to_lowercase().starts_with(&prefix.to_lowercase()) && !self.completions.iter().any(|c| c.label == label) {

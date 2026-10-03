@@ -1,9 +1,12 @@
 use std::{
-    collections::{BTreeSet, hash_map::DefaultHasher},
+    cell::RefCell,
+    collections::{BTreeSet, HashMap, hash_map::DefaultHasher},
     fs,
     hash::{Hash, Hasher},
     io::{self, Read, Write},
     path::{Component, Path, PathBuf},
+    rc::Rc,
+    thread::LocalKey,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -66,23 +69,66 @@ pub fn is_source(path: &Path) -> bool {
 }
 
 /// Conserva líneas y columnas, sin comentarios ni bloques de código literal.
-pub fn code(text: &str) -> String {
+/// Texto sin comentarios ni código literal (se rellenan con espacios para
+/// conservar posiciones). Se recuerda por contenido: completar y el panel de
+/// referencias lo piden en cada tecla o cuadro con el mismo texto.
+pub fn code(text: &str) -> Rc<str> {
+    memo(&CODE, text, || clean(text).into())
+}
+
+fn clean(text: &str) -> String {
     let lines: Vec<_> = text.split('\n').map(str::to_string).collect();
     let spans = highlight::tokenize(&lines);
-    lines
-        .iter()
-        .zip(spans)
-        .map(|(line, spans)| {
-            let mut chars: Vec<_> = line.chars().collect();
-            for span in spans {
-                if matches!(span.tok, highlight::Tok::Comment | highlight::Tok::Verbatim) {
-                    chars[span.start..span.end].fill(' ');
-                }
-            }
-            chars.into_iter().collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    let mut out = String::with_capacity(text.len());
+    for (i, (line, spans)) in lines.iter().zip(spans).enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        let hidden: Vec<_> = spans
+            .iter()
+            .filter(|span| matches!(span.tok, highlight::Tok::Comment | highlight::Tok::Verbatim))
+            .collect();
+        if hidden.is_empty() {
+            out.push_str(line);
+            continue;
+        }
+        for (col, c) in line.chars().enumerate() {
+            let blank = hidden
+                .iter()
+                .any(|span| (span.start..span.end).contains(&col));
+            out.push(if blank { ' ' } else { c });
+        }
+    }
+    out
+}
+
+type Memo<T> = LocalKey<RefCell<HashMap<u64, T>>>;
+
+thread_local! {
+    static CODE: RefCell<HashMap<u64, Rc<str>>> = Default::default();
+    static LABELS: RefCell<HashMap<u64, Rc<[Target]>>> = Default::default();
+    static CITATIONS: RefCell<HashMap<u64, Rc<[Target]>>> = Default::default();
+}
+
+/// Resultado de `make` recordado por la huella de `key`. Se vacía al pasar
+/// de unas decenas de entradas: solo interesa no repetir el último cálculo.
+fn memo<T: Clone, K: std::hash::Hash + ?Sized>(
+    slot: &'static Memo<T>,
+    key: &K,
+    make: impl FnOnce() -> T,
+) -> T {
+    let key = eframe::egui::util::hash(key);
+    if let Some(found) = slot.with_borrow(|map| map.get(&key).cloned()) {
+        return found;
+    }
+    let value = make();
+    slot.with_borrow_mut(|map| {
+        if map.len() >= 32 {
+            map.clear();
+        }
+        map.insert(key, value.clone());
+    });
+    value
 }
 
 pub fn resolve_file(root: &Path, current: &Path, name: &str, extension: &str) -> Option<PathBuf> {
@@ -144,70 +190,95 @@ pub fn sources(root: &Path, overlays: &[Source]) -> Vec<Source> {
 }
 
 pub fn labels(sources: &[Source]) -> Vec<Target> {
+    sources
+        .iter()
+        .flat_map(|source| {
+            memo(&LABELS, &(&source.path, &source.text), || {
+                source_labels(source)
+            })
+            .to_vec()
+        })
+        .collect()
+}
+
+fn source_labels(source: &Source) -> Rc<[Target]> {
+    let clean = code(&source.text);
     let mut targets = Vec::new();
-    for source in sources {
-        let clean = code(&source.text);
-        for m in regex(r"\\label\s*\{([^}]+)\}").captures_iter(&clean) {
-            let start = m.get(0).unwrap().start();
-            targets.push(Target {
-                path: source.path.clone(),
-                row: clean[..start].matches('\n').count(),
-                col: clean[..start].rsplit('\n').next().unwrap().chars().count(),
-                label: m[1].into(),
-                detail: "Etiqueta".into(),
-            });
-        }
+    let (mut row, mut seen) = (0, 0);
+    for m in regex(r"\\label\s*\{([^}]+)\}").captures_iter(&clean) {
+        let start = m.get(0).unwrap().start();
+        row += clean[seen..start].matches('\n').count();
+        seen = start;
+        targets.push(Target {
+            path: source.path.clone(),
+            row,
+            col: clean[..start].rsplit('\n').next().unwrap().chars().count(),
+            label: m[1].into(),
+            detail: "Etiqueta".into(),
+        });
     }
-    targets
+    targets.into()
 }
 
 pub fn citations(sources: &[Source]) -> Vec<Target> {
+    sources
+        .iter()
+        .flat_map(|source| {
+            memo(&CITATIONS, &(&source.path, &source.text), || {
+                source_citations(source)
+            })
+            .to_vec()
+        })
+        .collect()
+}
+
+fn source_citations(source: &Source) -> Rc<[Target]> {
     let mut targets = Vec::new();
-    for source in sources {
-        let text = if source.path.extension().is_some_and(|e| e == "bib") {
-            source.text.clone()
-        } else {
-            code(&source.text)
-        };
-        let entries: Vec<_> = regex(
-            r"(?im)^\s*@([a-z]+)\s*[({]\s*([^,\s})]+)\s*,|\\bibitem(?:\[[^\]]*\])?\{([^}]+)\}",
-        )
-        .captures_iter(&text)
-        .collect();
-        for (i, entry) in entries.iter().enumerate() {
-            if entry.get(1).is_some_and(|kind| {
-                ["comment", "string", "preamble"].contains(&kind.as_str().to_lowercase().as_str())
-            }) {
-                continue;
-            }
-            let start = entry.get(0).unwrap().start();
-            let end = entries
-                .get(i + 1)
-                .map_or(text.len(), |m| m.get(0).unwrap().start());
-            let detail = regex(r#"(?im)\b(title|author|year|journal)\s*=\s*[{"]([^\n]+)"#)
-                .captures_iter(&text[start..end])
-                .map(|m| {
-                    m[2].trim()
-                        .trim_end_matches([',', '}', '"'])
-                        .replace(['{', '}'], "")
-                })
-                .collect::<Vec<_>>()
-                .join(" · ");
-            targets.push(Target {
-                path: source.path.clone(),
-                row: text[..start].matches('\n').count(),
-                col: 0,
-                label: entry
-                    .get(2)
-                    .or_else(|| entry.get(3))
-                    .unwrap()
-                    .as_str()
-                    .into(),
-                detail,
-            });
+    let text: Rc<str> = if source.path.extension().is_some_and(|e| e == "bib") {
+        source.text.as_str().into()
+    } else {
+        code(&source.text)
+    };
+    let entries: Vec<_> =
+        regex(r"(?im)^\s*@([a-z]+)\s*[({]\s*([^,\s})]+)\s*,|\\bibitem(?:\[[^\]]*\])?\{([^}]+)\}")
+            .captures_iter(&text)
+            .collect();
+    let (mut row, mut seen) = (0, 0);
+    for (i, entry) in entries.iter().enumerate() {
+        let start = entry.get(0).unwrap().start();
+        row += text[seen..start].matches('\n').count();
+        seen = start;
+        if entry.get(1).is_some_and(|kind| {
+            ["comment", "string", "preamble"].contains(&kind.as_str().to_lowercase().as_str())
+        }) {
+            continue;
         }
+        let end = entries
+            .get(i + 1)
+            .map_or(text.len(), |m| m.get(0).unwrap().start());
+        let detail = regex(r#"(?im)\b(title|author|year|journal)\s*=\s*[{"]([^\n]+)"#)
+            .captures_iter(&text[start..end])
+            .map(|m| {
+                m[2].trim()
+                    .trim_end_matches([',', '}', '"'])
+                    .replace(['{', '}'], "")
+            })
+            .collect::<Vec<_>>()
+            .join(" · ");
+        targets.push(Target {
+            path: source.path.clone(),
+            row,
+            col: 0,
+            label: entry
+                .get(2)
+                .or_else(|| entry.get(3))
+                .unwrap()
+                .as_str()
+                .into(),
+            detail,
+        });
     }
-    targets
+    targets.into()
 }
 
 pub fn table(rows: usize, columns: usize, alignment: char) -> String {

@@ -102,6 +102,7 @@ pub struct App {
     background_job: Option<Receiver<BackgroundFrame>>,
     preview: Preview,
     markdown_cache: CommonMarkCache,
+    markdown_view: crate::mdview::MarkdownView,
     compile_rx: Option<Receiver<Result<CompileResult, String>>>,
     cancel: Arc<AtomicBool>,
     compile_thread: Option<thread::JoinHandle<()>>,
@@ -250,6 +251,7 @@ impl App {
             background_layout: (1.0, egui::Vec2::ZERO),
             background_job: None,
             markdown_cache: CommonMarkCache::default(),
+            markdown_view: Default::default(),
             compile_rx: None,
             cancel: Arc::new(AtomicBool::new(false)),
             compile_thread: None,
@@ -2077,32 +2079,10 @@ impl App {
         let scheme = format!("file://{}/", base.display());
         let editor = &self.documents[self.active].editor;
         let text = editor.source();
-        // Los enlaces solo cambian con el texto: no se vuelve a leer en cada cuadro.
-        let links_id = id.with("markdown_links");
-        let links = ui
-            .data(|d| d.get_temp::<(u64, Arc<Vec<String>>)>(links_id))
-            .filter(|(revision, _)| *revision == editor.revision)
-            .map(|(_, links)| links)
-            .unwrap_or_else(|| {
-                let links: Arc<Vec<String>> = Arc::new(
-                    pulldown_cmark::Parser::new(text)
-                        .filter_map(|event| match event {
-                            pulldown_cmark::Event::Start(pulldown_cmark::Tag::Link {
-                                dest_url,
-                                ..
-                            }) if !dest_url.contains(':')
-                                && !dest_url.starts_with('#')
-                                && !dest_url.is_empty() =>
-                            {
-                                Some(dest_url.into_string())
-                            }
-                            _ => None,
-                        })
-                        .collect(),
-                );
-                ui.data_mut(|d| d.insert_temp(links_id, (editor.revision, links.clone())));
-                links
-            });
+        // Un solo análisis por revisión da los trozos de la vista y los enlaces.
+        let scroll_id = id.with("markdown_scroll");
+        self.markdown_view.update(scroll_id, text, editor.revision);
+        let links = std::mem::take(&mut self.markdown_view.links);
         self.markdown_cache.link_hooks_clear();
         for link in links.iter() {
             self.markdown_cache.add_link_hook(link);
@@ -2115,32 +2095,34 @@ impl App {
                 ui.label("Vista previa de Markdown");
                 ui.separator();
                 let width = (ui.available_width() - 32.0).clamp(1.0, 720.0);
-                ScrollArea::both()
-                    .id_salt(id.with("markdown_scroll"))
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        egui::Frame::new().inner_margin(16.0).show(ui, |ui| {
-                            ui.set_max_width(width);
-                            ui.style_mut()
-                                .text_styles
-                                .insert(egui::TextStyle::Body, FontId::proportional(18.0));
-                            ui.spacing_mut().item_spacing.y = 10.0;
-                            CommonMarkViewer::new()
-                                .enable_scroll_to_heading(true)
-                                .default_implicit_uri_scheme(scheme)
-                                .max_image_width(Some(ui.available_width().max(1.0) as usize))
-                                .show(ui, &mut self.markdown_cache, text);
-                        });
-                    });
+                ui.style_mut()
+                    .text_styles
+                    .insert(egui::TextStyle::Body, FontId::proportional(18.0));
+                ui.spacing_mut().item_spacing.y = 10.0;
+                self.markdown_view.show(
+                    ui,
+                    scroll_id,
+                    &mut self.markdown_cache,
+                    text,
+                    editor.revision,
+                    width,
+                    |ui| {
+                        CommonMarkViewer::new()
+                            .enable_scroll_to_heading(true)
+                            .default_implicit_uri_scheme(scheme.clone())
+                            .max_image_width(Some(ui.available_width().max(1.0) as usize))
+                    },
+                );
             });
-        if let Some(link) = links
+        let clicked = links
             .iter()
             .find(|link| self.markdown_cache.get_link_hook(link) == Some(true))
+            .map(|link| base.join(link.split('#').next().unwrap_or(link)));
+        self.markdown_view.links = links;
+        if let Some(path) = clicked
+            && let Err(e) = self.open(&path)
         {
-            let path = base.join(link.split('#').next().unwrap_or(link));
-            if let Err(e) = self.open(&path) {
-                self.message = e;
-            }
+            self.message = e;
         }
     }
     fn problems(&mut self, ui: &mut egui::Ui) {

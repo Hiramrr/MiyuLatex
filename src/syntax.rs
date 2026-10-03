@@ -221,6 +221,39 @@ impl Syntax {
         }
     }
 
+    /// Texto LaTeX sin comentarios ni código literal, como `latex::code`,
+    /// pero a partir de los tramos ya resaltados: no vuelve a tokenizar.
+    /// `None` si el resaltado no está al día.
+    pub fn latex_code(&self, lines: &[String]) -> Option<String> {
+        if !matches!(self.kind, Kind::Latex) || !self.stale.is_empty() {
+            return None;
+        }
+        let hidden = |run: &Run| matches!(run.style.ink, Ink::Tok(Tok::Comment | Tok::Verbatim));
+        let mut out = String::with_capacity(lines.iter().map(|l| l.len() + 1).sum());
+        for (i, (text, line)) in lines.iter().zip(&self.lines).enumerate() {
+            if i > 0 {
+                out.push('\n');
+            }
+            if !line.runs.iter().any(hidden) {
+                out.push_str(text);
+                continue;
+            }
+            let mut start = 0;
+            for run in &line.runs {
+                let end = (run.end as usize).min(text.len());
+                let piece = text.get(start..end).unwrap_or_default();
+                if hidden(run) {
+                    out.extend(piece.chars().map(|_| ' '));
+                } else {
+                    out.push_str(piece);
+                }
+                start = end;
+            }
+            out.push_str(text.get(start..).unwrap_or_default());
+        }
+        Some(out)
+    }
+
     /// Tokens LaTeX de las filas que contienen un comando de sección.
     pub fn sections<'a>(
         &'a self,
@@ -400,5 +433,19 @@ mod tests {
         syntax.advance(&text, None);
         let rows: Vec<_> = syntax.sections(&text).map(|(row, _)| row).collect();
         assert_eq!(rows, [0]);
+    }
+
+    /// El texto limpio que sale del resaltado es el mismo que tokenizando.
+    #[test]
+    fn latex_code_matches_tokenizing() {
+        let source = "\\newcommand{\\R}{\\mathbb{R}} % \\newcommand{\\no}{x}\nTexto ñandú \\verb|\\def\\b| y $x$ % fin ü\n\\begin{verbatim}\n\\def\\c{}\n\\end{verbatim}\n\\def\\d{}";
+        let text = lines(source);
+        let mut syntax = Syntax::new(&Format::Latex, &text);
+        assert_eq!(syntax.latex_code(&text), None);
+        syntax.advance(&text, None);
+        assert_eq!(
+            syntax.latex_code(&text).as_deref(),
+            Some(&*crate::latex::code(source))
+        );
     }
 }

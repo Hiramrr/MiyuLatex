@@ -11,6 +11,7 @@ mod latex;
 mod layout;
 mod marks;
 mod mascot;
+mod mdview;
 mod preview;
 mod spell;
 mod synctex;

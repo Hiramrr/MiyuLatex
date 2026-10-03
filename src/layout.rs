@@ -7,6 +7,7 @@ use std::{
     collections::HashMap,
     hash::{BuildHasherDefault, Hasher},
     sync::Arc,
+    time::{Duration, Instant},
 };
 
 use eframe::egui::{
@@ -35,6 +36,16 @@ impl Hasher for Identity {
         self.0 = key;
     }
 }
+
+/// Tiempo por cuadro para maquetar con color las filas lejos del cursor.
+/// Lo que no cabe se maqueta como texto plano, que mide lo mismo (todas las
+/// fichas usan la misma fuente monoespaciada) y es unas treinta veces más
+/// barato: egui da forma a cada tramo de color por separado.
+const BUDGET: Duration = Duration::from_millis(4);
+/// Filas alrededor del cursor que siempre se maquetan con color.
+const NEAR: usize = 120;
+/// Marca la huella de una fila maquetada en plano, pendiente de color.
+const PLAIN: u64 = 0x9e37_79b9_7f4a_7c15;
 
 /// Aspecto con que se maqueta el texto.
 pub struct Look<'a> {
@@ -186,21 +197,39 @@ impl Layout {
             max_width: width,
             ..Default::default()
         };
+        let started = Instant::now();
+        let cursor = editor.cursor.row;
+        let mut keys = keys;
+        let mut pending = false;
         let changed: Vec<Arc<Galley>> = (head..count - tail)
             .map(|row| {
-                self.cache
-                    .entry(keys[row])
-                    .or_insert_with(|| {
-                        let last = trailing && row + 1 == count;
-                        let runs = &editor.syntax.lines[row].runs;
-                        paragraph(ui, &lines[row], runs, last, look, &wrap)
-                    })
-                    .clone()
+                let last = trailing && row + 1 == count;
+                if let Some(galley) = self.cache.get(&keys[row]) {
+                    return galley.clone();
+                }
+                if row.abs_diff(cursor) > NEAR && started.elapsed() > BUDGET {
+                    pending = true;
+                    keys[row] ^= PLAIN;
+                    return self
+                        .cache
+                        .entry(keys[row])
+                        .or_insert_with(|| paragraph(ui, &lines[row], &[], last, look, &wrap))
+                        .clone();
+                }
+                let runs = &editor.syntax.lines[row].runs;
+                let galley = paragraph(ui, &lines[row], runs, last, look, &wrap);
+                self.cache.insert(keys[row], galley.clone());
+                galley
             })
             .collect();
         let removed = self.keys.len() - head - tail;
         self.rows.splice(head..head + removed, changed);
         self.keys = keys;
+        if pending {
+            // Las filas en plano se colorean en los cuadros siguientes.
+            self.seen = None;
+            ui.ctx().request_repaint();
+        }
         if self.cache.len() > 2 * count + 1024 {
             self.cache = self
                 .keys
