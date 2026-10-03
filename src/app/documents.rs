@@ -10,6 +10,8 @@ impl App {
             editor,
             layout: Layout::default(),
             pdf: None,
+            git: None,
+            changes: (0, Vec::new()),
         });
         self.activate(self.documents.len() - 1);
     }
@@ -21,6 +23,15 @@ impl App {
         self.find = false;
         self.goto = false;
         self.symbols = false;
+        // La rama o el último commit pueden haber cambiado fuera de la aplicación.
+        let doc = &mut self.documents[index];
+        doc.git = doc
+            .editor
+            .path
+            .as_deref()
+            .filter(|_| doc.editor.format.editable())
+            .and_then(crate::git::info);
+        doc.changes = (u64::MAX, Vec::new());
         self.refresh_sources();
         if self.editor().format != Format::Latex
             && !self

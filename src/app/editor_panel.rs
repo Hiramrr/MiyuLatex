@@ -252,6 +252,16 @@ impl App {
                     .filter(|d| Some(&d.path) == doc.editor.path.as_ref())
                     .collect();
                 let mut definition = None;
+                if doc.changes.0 != doc.editor.revision {
+                    let marks = doc
+                        .git
+                        .as_ref()
+                        .and_then(|git| git.base.as_deref())
+                        .map(|base| crate::git::marks(base, doc.editor.source()))
+                        .unwrap_or_default();
+                    doc.changes = (doc.editor.revision, marks);
+                }
+                let changes = std::mem::take(&mut doc.changes.1);
                 ScrollArea::both()
                     .id_salt(doc.id.with("scroll"))
                     .auto_shrink([false, false])
@@ -383,6 +393,27 @@ impl App {
                                             &mut misspelled,
                                         );
                                     }
+                                    // Cambios desde el último commit, junto al texto.
+                                    let first = changes.partition_point(|(row, _)| *row < line - 1);
+                                    if let Some((_, mark)) =
+                                        changes.get(first).filter(|(row, _)| *row == line - 1)
+                                    {
+                                        let x = origin.x + gutter - 2.5;
+                                        let (color, y) = match mark {
+                                            crate::git::Mark::Added => (theme.success, row_rect.y_range()),
+                                            crate::git::Mark::Modified => (theme.warning, row_rect.y_range()),
+                                            crate::git::Mark::Removed => {
+                                                (theme.error, (row_rect.top() - 2.0..=row_rect.top() + 2.0).into())
+                                            }
+                                        };
+                                        if !matches!(mark, crate::git::Mark::Removed) || starts_line {
+                                            misspelled.push(egui::Shape::rect_filled(
+                                                egui::Rect::from_x_y_ranges(x - 1.0..=x + 1.0, y),
+                                                0.0,
+                                                col(color),
+                                            ));
+                                        }
+                                    }
                                     let here = || problems.iter().filter(|d| d.row == line - 1);
                                     if here().next().is_some() {
                                         let color = col(if here().any(|d| d.error) {
@@ -496,6 +527,7 @@ impl App {
                         });
                     });
                 self.documents[self.active].layout = text_layout;
+                self.documents[self.active].changes.1 = changes;
                 if corrected {
                     self.changed_editor();
                 }

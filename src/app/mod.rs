@@ -56,6 +56,11 @@ struct Document {
     editor: Editor,
     layout: Layout,
     pdf: Option<Preview>,
+    /// Rama y versión confirmada del archivo, si está en un repositorio.
+    git: Option<crate::git::Info>,
+    /// Líneas que cambiaron desde el último commit y la revisión del texto
+    /// con que se calcularon.
+    changes: (u64, Vec<(usize, crate::git::Mark)>),
 }
 /// Clave, celdas del tramado, puntos por celda y tamaño de ventana.
 type BackgroundFrame = (String, egui::ColorImage, f32, egui::Vec2);
@@ -329,6 +334,18 @@ impl App {
                             .size(13.0)
                             .color(col(self.theme.muted())),
                     );
+                    if let Some(git) = &self.documents[self.active].git {
+                        ui.label(
+                            RichText::new(format!("Git: {}", git.branch))
+                                .size(13.0)
+                                .color(col(self.theme.muted())),
+                        )
+                        .on_hover_text(if git.base.is_some() {
+                            "Rama del repositorio. El margen del editor marca las líneas que cambiaron desde el último commit."
+                        } else {
+                            "Rama del repositorio. Este archivo todavía no está en ningún commit."
+                        });
+                    }
                     if !self.editor().format.editable() {
                         return;
                     }

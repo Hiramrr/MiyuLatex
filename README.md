@@ -260,6 +260,13 @@ Si otro programa cambia un archivo abierto, Miyu lo recarga al volver a la
 ventana. Deshacer recupera el texto anterior. Si además tenías cambios sin
 guardar, pregunta si recargar o conservar tu versión.
 
+## Git
+
+Si el archivo está en un repositorio, la barra de estado muestra la rama y el
+margen del editor marca lo que cambió desde el último commit: verde para las
+líneas nuevas, ámbar para las modificadas y una señal roja donde se borraron
+líneas. La rama y el commit se vuelven a leer al cambiar de pestaña.
+
 ## Ortografía
 
 En macOS, el editor subraya las palabras que no están en el diccionario del
@@ -350,7 +357,7 @@ miyu --render-background foto.png fondo.png 1280 800 2 1 16131f dither
 `highlight.rs` resalta LaTeX, `syntax.rs` mantiene el resaltado por líneas y
 `layout.rs` maqueta solo las que cambian. `format.rs` detecta formatos y extrae
 el esquema de Markdown, `latex.rs` reúne fuentes, etiquetas, citas, historial y
-ZIP del proyecto, `compiler.rs` compila y lee problemas, `bib.rs` revisa la bibliografía, `diff.rs` compara versiones, `synctex.rs` relaciona
+ZIP del proyecto, `compiler.rs` compila y lee problemas, `bib.rs` revisa la bibliografía, `diff.rs` compara versiones, `git.rs` lee la rama y los cambios, `formatter.rs` llama a los formateadores, `synctex.rs` relaciona
 el código con el PDF, `preview.rs` rasteriza y dibuja el PDF, `pdftext.rs` lee su texto, `spell.rs` revisa
 la ortografía, `workspace.rs` lleva la sesión y los archivos, `backdrop.rs` trama la foto, `theme.rs` define
 los temas, `custom.rs` aplica la personalización y `config.rs` guarda

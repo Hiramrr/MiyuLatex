@@ -7,6 +7,7 @@ mod custom;
 mod diff;
 mod editor;
 mod format;
+mod git;
 mod formatter;
 mod highlight;
 mod icons;
