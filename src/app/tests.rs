@@ -275,6 +275,11 @@ fn code_shortcuts_completion_and_search() {
     place(&mut app, 1, 18);
     tick(&mut app, &ctx, vec![key(Key::Enter, Modifiers::COMMAND)]);
     assert_eq!(app.editor().cursor, Pos::new(2, 4));
+    // El vocabulario del lenguaje se prepara la primera vez que se piden
+    // sugerencias. Se hace antes de teclear: en un equipo lento tarda más que
+    // el segundo que agrupa las letras al deshacer.
+    tick(&mut app, &ctx, vec![key(Key::Space, Modifiers::CTRL)]);
+    tick(&mut app, &ctx, vec![key(Key::Escape, Modifiers::NONE)]);
     for letter in ["o", "t", "h"] {
         tick(&mut app, &ctx, vec![egui::Event::Text(letter.into())]);
     }
