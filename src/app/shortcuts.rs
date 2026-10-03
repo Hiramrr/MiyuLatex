@@ -68,6 +68,10 @@ impl App {
         if Self::shortcut(ctx, Modifiers::CTRL, Key::Tab) {
             self.activate((self.active + 1) % self.documents.len());
         }
+        // Con Mayús es ir al corchete emparejado, que atiende el editor.
+        if !ctx.input(|i| i.modifiers.shift) && Self::shortcut(ctx, cmd, Key::Backslash) {
+            self.toggle_split();
+        }
         if Self::shortcut(ctx, Modifiers::NONE, Key::F1) {
             self.help = !self.help;
         }

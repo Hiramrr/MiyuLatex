@@ -91,6 +91,7 @@ impl App {
                         ("Shift+K", "Borrar la línea"),
                         ("Enter", "Línea nueva debajo (con Shift, encima)"),
                         ("Shift+\\", "Ir al corchete emparejado (o Ctrl+M)"),
+                        ("\\", "Dividir el editor en dos paneles"),
                         ("Z", "Deshacer"),
                         ("Shift+Z", "Rehacer"),
                         (",", "Preferencias"),

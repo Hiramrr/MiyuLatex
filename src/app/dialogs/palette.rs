@@ -41,6 +41,7 @@ pub(in crate::app) enum Command {
     ToggleSidebar,
     TogglePreview,
     ToggleWrap,
+    ToggleSplit,
     ToggleProblems,
     ToggleMascot,
     Bold,
@@ -193,6 +194,12 @@ impl App {
                 "",
                 true,
                 Command::ToggleWrap,
+            ),
+            (
+                "Dividir el editor en dos paneles",
+                "Mod+\\",
+                true,
+                Command::ToggleSplit,
             ),
             (
                 "Mostrar u ocultar problemas y registro",
@@ -380,6 +387,7 @@ impl App {
                 self.config.soft_wrap = !self.config.soft_wrap;
                 self.preferences_changed(ctx);
             }
+            Command::ToggleSplit => self.toggle_split(),
             Command::ToggleProblems => self.panel = !self.panel,
             Command::ToggleMascot => {
                 self.config.mascot = !self.config.mascot;

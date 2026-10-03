@@ -152,6 +152,11 @@ impl App {
                     let mut changed = ui.checkbox(&mut self.config.show_sidebar, "Panel de archivos, esquema y referencias").on_hover_text("Muestra u oculta el panel lateral. F2.").changed();
                     changed |= ui.checkbox(&mut self.config.show_preview, "Vista previa").on_hover_text("Muestra el PDF de LaTeX o la vista previa de Markdown. F3.").changed();
                     changed |= ui.checkbox(&mut self.config.soft_wrap, "Ajustar líneas al ancho del editor").changed();
+                    let mut split = self.split.is_some();
+                    if ui.checkbox(&mut split, "Dividir el editor en dos paneles").on_hover_text("Muestra dos documentos uno junto al otro. Un clic en un panel lo activa y las pestañas cambian el documento del panel activo. Cmd/Ctrl+\\.").changed() {
+                        self.toggle_split();
+                        ui.close();
+                    }
                     ui.checkbox(&mut self.panel, "Problemas y registro de compilación").on_hover_text("Muestra u oculta los resultados de la última compilación. F4.");
                     changed |= ui.checkbox(&mut self.config.mascot, "Gatito en la barra de estado").on_hover_text("Muestra u oculta la mascota. Teclea en su portátil mientras escribes, espera la compilación y se duerme si no hay actividad.").changed();
                     changed |= ui.add_enabled(self.config.mascot, egui::Checkbox::new(&mut self.config.mascot_friend, "Cangrejito amigo del gatito")).on_hover_text("Un cangrejito que pasea por la barra de estado y va a saludar al gatito.").changed();

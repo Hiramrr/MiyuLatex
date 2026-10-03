@@ -1122,3 +1122,85 @@ fn types_with_several_cursors() {
     assert_eq!(app.editor().text(), "-uno\n-dos\n-tres");
     fs::remove_dir_all(folder).unwrap();
 }
+
+#[test]
+fn splits_the_editor_in_two_panes() {
+    let folder = std::env::temp_dir().join(format!("miyu-dividir-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    for name in ["a.txt", "b.txt", "c.txt"] {
+        fs::write(folder.join(name), format!("texto de {name}\n")).unwrap();
+    }
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(folder.join("a.txt")), &ctx).unwrap();
+    app.backdrop = Backdrop::default();
+    app.config.completions = false;
+    app.config.show_sidebar = false;
+    tick(&mut app, &ctx, vec![]);
+    // Con un solo documento no hay con qué dividir.
+    tick(
+        &mut app,
+        &ctx,
+        vec![key(Key::Backslash, Modifiers::COMMAND)],
+    );
+    assert!(app.split.is_none());
+    assert!(!app.message.is_empty());
+    app.open(&folder.join("b.txt")).unwrap();
+    app.open(&folder.join("c.txt")).unwrap();
+    app.activate(0);
+    tick(&mut app, &ctx, vec![]);
+    tick(
+        &mut app,
+        &ctx,
+        vec![key(Key::Backslash, Modifiers::COMMAND)],
+    );
+    let ids: Vec<Id> = app.documents.iter().map(|d| d.id).collect();
+    assert_eq!(app.split, Some([ids[0], ids[1]]));
+    tick(&mut app, &ctx, vec![]);
+    // Se escribe en el panel activo, el de la izquierda.
+    tick(&mut app, &ctx, vec![egui::Event::Text("X".into())]);
+    assert!(app.documents[0].editor.text().starts_with('X'));
+    assert_eq!(app.documents[1].editor.text(), "texto de b.txt\n");
+    // Un clic en el panel derecho lo activa y el teclado pasa a él.
+    let pos = egui::pos2(1000.0, 300.0);
+    tick(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)]);
+    for pressed in [true, false] {
+        tick(
+            &mut app,
+            &ctx,
+            vec![egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            }],
+        );
+    }
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!(app.active, 1);
+    tick(&mut app, &ctx, vec![]);
+    tick(&mut app, &ctx, vec![egui::Event::Text("Y".into())]);
+    assert!(app.documents[1].editor.text().contains('Y'));
+    assert!(!app.documents[0].editor.text().contains('Y'));
+    // Otra pestaña sustituye al documento del panel activo.
+    app.activate(2);
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!(app.split, Some([ids[0], ids[2]]));
+    // Cerrar uno de los dos documentos deshace la división.
+    app.documents.remove(0);
+    app.active = 1;
+    tick(&mut app, &ctx, vec![]);
+    assert!(app.split.is_none());
+    tick(
+        &mut app,
+        &ctx,
+        vec![key(Key::Backslash, Modifiers::COMMAND)],
+    );
+    assert!(app.split.is_some());
+    tick(
+        &mut app,
+        &ctx,
+        vec![key(Key::Backslash, Modifiers::COMMAND)],
+    );
+    assert!(app.split.is_none());
+    fs::remove_dir_all(folder).unwrap();
+}

@@ -91,6 +91,9 @@ pub struct App {
     config: Config,
     documents: Vec<Document>,
     active: usize,
+    /// Documentos de los dos paneles de la vista dividida y cuál tiene el foco.
+    split: Option<[Id; 2]>,
+    split_focus: usize,
     next_id: u64,
     project: PathBuf,
     files: Vec<PathBuf>,
@@ -208,6 +211,8 @@ impl App {
             config,
             documents: Vec::new(),
             active: 0,
+            split: None,
+            split_focus: 0,
             next_id: 0,
             files: project_files(&project),
             project_settings: latex::Project::load(&project),

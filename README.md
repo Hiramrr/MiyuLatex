@@ -111,6 +111,12 @@ Las flechas eligen una sugerencia, Tab la inserta y Esc cierra la lista;
 Ctrl+Espacio la abre sin haber escrito nada. Copiar o cortar sin selección toma la línea
 entera. Deshacer agrupa las letras escritas seguidas.
 
+Dividir el editor (`Cmd+\`), en Ver, muestra dos documentos uno junto al
+otro, por ejemplo un capítulo y la bibliografía. Un clic en un panel lo
+activa: el teclado, la búsqueda y la vista previa siguen al panel activo, y
+elegir otra pestaña cambia su documento. La pestaña del otro panel queda
+subrayada en gris. La ortografía solo se revisa en el panel activo.
+
 El editor admite varios cursores. `Cmd+D` selecciona la palabra y, al
 repetirlo, añade su siguiente aparición; `Cmd+Alt+↑` y `Cmd+Alt+↓` añaden un
 cursor en la línea de arriba o de abajo, y `Alt`+clic lo pone donde señales.
@@ -165,6 +171,7 @@ Abre y guarda otros lenguajes con su extensión.
 | `F5` / `Cmd+R` | Guardar los documentos LaTeX y compilar |
 | `F6` | Abrir el PDF en el visor del sistema |
 | `F2` / `F3` / `F4` | Mostrar archivos, vista previa o problemas |
+| `Cmd+\` | Dividir el editor en dos paneles |
 | `Cmd+F` / `Cmd+G` | Buscar y reemplazar / ir a línea |
 | `Cmd+Shift+F` | Buscar en el proyecto |
 | `Cmd+Shift+O` | Abrir rápido un archivo del proyecto |
