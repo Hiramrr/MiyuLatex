@@ -405,6 +405,22 @@ impl App {
                         self.panel = false;
                         self.focus_editor = true;
                     }
+                    if !self.developer.selected
+                        && action(
+                            ui,
+                            "Copiar",
+                            true,
+                            "Copia al portapapeles los problemas o el registro que se ven en el panel.",
+                        )
+                        .clicked()
+                    {
+                        ui.ctx().copy_text(self.panel_text());
+                        self.message = if self.log {
+                            "Registro copiado".into()
+                        } else {
+                            "Problemas copiados".into()
+                        };
+                    }
                 });
                 ui.separator();
                 if self.developer.selected {
@@ -431,16 +447,11 @@ impl App {
                                     problem.file.display(),
                                     problem.line.map_or(String::new(), |n| format!(":{n}"))
                                 );
-                                if ui
-                                    .button(
-                                        RichText::new(format!(
-                                            "{} · {location} · {}",
-                                            problem.severity, problem.message
-                                        ))
-                                        .color(col(color)),
-                                    )
-                                    .clicked()
-                                {
+                                let text =
+                                    format!("{} · {location} · {}", problem.severity, problem.message);
+                                let button = ui.button(RichText::new(&text).color(col(color)));
+                                copy_menu(&button, text);
+                                if button.clicked() {
                                     jump =
                                         Some((Self::problem_path(result, problem), problem.line));
                                 }
@@ -486,4 +497,42 @@ fn pdf_search_button(ui: &mut egui::Ui, enabled: bool) -> egui::Response {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, "Buscar en PDF")
     });
     response.on_hover_text("Buscar en el PDF. Cmd/Ctrl+F en una pestaña PDF.")
+}
+
+/// Clic derecho sobre un problema: copiar su texto.
+pub(super) fn copy_menu(response: &egui::Response, text: String) {
+    response.context_menu(|ui| {
+        if ui.button("Copiar").clicked() {
+            ui.ctx().copy_text(text);
+            ui.close();
+        }
+    });
+}
+
+impl App {
+    /// Lo que muestra el panel de problemas, en texto plano y sin el tope de filas.
+    pub(super) fn panel_text(&self) -> String {
+        let Some(result) = &self.result else {
+            return self.language_server_text();
+        };
+        if self.log {
+            return result.output.clone();
+        }
+        let mut lines: Vec<String> = result
+            .problems
+            .iter()
+            .map(|problem| {
+                format!(
+                    "{} · {}{} · {}",
+                    problem.severity,
+                    problem.file.display(),
+                    problem.line.map_or(String::new(), |n| format!(":{n}")),
+                    problem.message
+                )
+            })
+            .collect();
+        lines.push(self.language_server_text());
+        lines.retain(|line| !line.is_empty());
+        lines.join("\n")
+    }
 }

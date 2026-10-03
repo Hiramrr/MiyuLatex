@@ -1928,3 +1928,36 @@ fn typewriter_centers_lines_below_folded_blocks() {
     }
     fs::remove_dir_all(folder).unwrap();
 }
+
+#[test]
+fn problems_panel_copies_problems_and_log() {
+    let folder = std::env::temp_dir().join(format!("miyu-copiar-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("nota.tex");
+    fs::write(&path, "\\documentclass{article}\n").unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(path), &ctx).unwrap();
+    app.backdrop = Backdrop::default();
+    app.result = Some(compiler::CompileResult {
+        ok: false,
+        engine: "tectonic".into(),
+        root: folder.clone(),
+        pdf: None,
+        duration: 0.1,
+        output: "registro completo".into(),
+        problems: vec![compiler::Problem {
+            severity: "error".into(),
+            message: "Undefined control sequence".into(),
+            file: "nota.tex".into(),
+            line: Some(3),
+        }],
+    });
+    app.log = false;
+    assert_eq!(
+        app.panel_text(),
+        "error · nota.tex:3 · Undefined control sequence"
+    );
+    app.log = true;
+    assert_eq!(app.panel_text(), "registro completo");
+    fs::remove_dir_all(folder).unwrap();
+}

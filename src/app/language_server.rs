@@ -7,6 +7,7 @@ use crate::{
     editor::Pos,
     lsp::{self, DocRef, Outcome, Severity},
 };
+use super::preview_panel::copy_menu;
 use std::collections::BTreeMap;
 
 /// El ratón debe quedarse quieto este tiempo sobre un identificador.
@@ -303,7 +304,9 @@ impl App {
                 problem.row + 1,
                 problem.message
             );
-            if ui.button(RichText::new(text).color(col(color))).clicked() {
+            let button = ui.button(RichText::new(&text).color(col(color)));
+            copy_menu(&button, text);
+            if button.clicked() {
                 *jump = Some((problem.path.clone(), Some(problem.row + 1)));
             }
         }
@@ -311,6 +314,25 @@ impl App {
         if more > 0 {
             ui.label(format!("… y {more} problemas más del servidor de lenguaje"));
         }
+    }
+
+    /// Los problemas del servidor de lenguaje, uno por línea, para copiarlos.
+    pub(super) fn language_server_text(&self) -> String {
+        self.lsp
+            .diagnostics
+            .values()
+            .flatten()
+            .map(|problem| {
+                format!(
+                    "{} · {}:{} · {}",
+                    problem.severity,
+                    problem.path.display(),
+                    problem.row + 1,
+                    problem.message
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// Hay un servidor listo para el documento activo.
