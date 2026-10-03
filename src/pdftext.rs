@@ -115,8 +115,16 @@ fn letters(c: char) -> &'static str {
     }
 }
 
+/// Minúscula sin tilde: «ecuacion» encuentra «Ecuación».
 fn lower(c: char) -> char {
-    c.to_lowercase().next().unwrap_or(c)
+    match c.to_lowercase().next().unwrap_or(c) {
+        'á' => 'a',
+        'é' => 'e',
+        'í' => 'i',
+        'ó' => 'o',
+        'ú' | 'ü' => 'u',
+        c => c,
+    }
 }
 
 impl PageText {
@@ -168,7 +176,8 @@ impl PageText {
         self.chars.len()
     }
 
-    /// Tramos `[inicio, fin)` donde aparece `query`, sin distinguir mayúsculas.
+    /// Tramos `[inicio, fin)` donde aparece `query`, sin distinguir mayúsculas
+    /// ni tildes.
     /// Un salto de línea vale por un espacio y una palabra partida con guion
     /// al final de la línea se busca entera.
     pub fn find(&self, query: &str) -> Vec<(usize, usize)> {
@@ -274,6 +283,7 @@ mod tests {
         let text = page.text(0, page.len());
         assert!(text.contains("Introducción"), "{text}");
         // Las cajas caen dentro de la página.
+        assert_eq!(page.find("introduccion"), page.find("INTRODUCCIÓN"));
         let (start, end) = page.find("introducción")[0];
         let rect = page.rects(start, end)[0];
         assert!(rect[0] > 0.0 && rect[2] < width && rect[1] > 0.0 && rect[3] < height);

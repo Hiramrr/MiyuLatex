@@ -129,7 +129,7 @@ cuando se ve. Al recompilar se conserva la posición. Cada pestaña conserva su
 página y su zoom.
 
 El campo Buscar del visor resalta las coincidencias en todas las páginas, sin
-distinguir mayúsculas. Enter y Mayús+Enter van a la siguiente o a la anterior.
+distinguir mayúsculas ni tildes. Enter y Mayús+Enter van a la siguiente o a la anterior.
 En una pestaña de PDF, `Cmd+F` lleva al campo. Una palabra partida con guion
 al final de una línea se encuentra entera. Arrastrar sobre una página
 selecciona su texto, y `Cmd+C` o el clic derecho lo copian. La selección no
