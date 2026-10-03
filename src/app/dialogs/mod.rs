@@ -6,6 +6,7 @@ mod insert;
 mod project;
 mod settings;
 
+pub(super) use insert::Table;
 pub(super) use project::History;
 
 impl App {

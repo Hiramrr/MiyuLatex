@@ -2,9 +2,23 @@
 
 use super::*;
 
+/// Ajustes de la ventana Insertar tabla; se conservan entre aperturas.
+pub(in crate::app) struct Table {
+    pub(in crate::app) open: bool,
+    rows: usize,
+    columns: usize,
+    alignment: char,
+}
+
+impl Default for Table {
+    fn default() -> Self {
+        Self { open: false, rows: 3, columns: 3, alignment: 'l' }
+    }
+}
+
 impl App {
     pub(super) fn table_dialog(&mut self, ctx: &egui::Context) {
-        if self.table {
+        if self.table.open {
             let mut open = true;
             let mut insert = false;
             egui::Window::new("Insertar tabla")
@@ -13,18 +27,18 @@ impl App {
                 .show(ctx, |ui| {
                     ui.horizontal(|ui| {
                         ui.label("Filas");
-                        ui.add(egui::DragValue::new(&mut self.table_rows).range(1..=100));
+                        ui.add(egui::DragValue::new(&mut self.table.rows).range(1..=100));
                     });
                     ui.horizontal(|ui| {
                         ui.label("Columnas");
-                        ui.add(egui::DragValue::new(&mut self.table_columns).range(1..=20));
+                        ui.add(egui::DragValue::new(&mut self.table.columns).range(1..=20));
                     });
                     ui.horizontal(|ui| {
                         ui.label("Alineación");
                         for (alignment, label) in
                             [('l', "Izquierda"), ('c', "Centro"), ('r', "Derecha")]
                         {
-                            ui.selectable_value(&mut self.table_alignment, alignment, label);
+                            ui.selectable_value(&mut self.table.alignment, alignment, label);
                         }
                     });
                     ui.horizontal_wrapped(|ui| {
@@ -41,14 +55,14 @@ impl App {
                         }
                     });
                 });
-            self.table = open;
+            self.table.open = open;
             if insert && self.editor().format == Format::Latex {
                 self.insert_snippet(&latex::table(
-                    self.table_rows,
-                    self.table_columns,
-                    self.table_alignment,
+                    self.table.rows,
+                    self.table.columns,
+                    self.table.alignment,
                 ));
-                self.table = false;
+                self.table.open = false;
             }
         }
     }

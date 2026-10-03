@@ -165,7 +165,7 @@ impl App {
                         ui.close();
                     }
                     if action(ui, "Tabla LaTeX…", latex, "Elige filas, columnas y alineación antes de insertar la tabla. Disponible en documentos LaTeX.").clicked() {
-                        self.table = true;
+                        self.table.open = true;
                         ui.close();
                     }
                     if action(ui, "Figura LaTeX…", latex && saved_source, "Elige una imagen e inserta una figura con pie y etiqueta. Guarda el documento LaTeX primero.").clicked() {
