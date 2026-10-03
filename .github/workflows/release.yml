@@ -1,0 +1,52 @@
+name: Release
+
+# Al publicar una etiqueta vX.Y.Z se compila la aplicación y se adjunta a la
+# versión de GitHub.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            asset: MiyuLaTeX-macos-arm64.zip
+          - os: ubuntu-latest
+            asset: miyu-linux-x86_64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+      - if: runner.os == 'macOS'
+        run: |
+          sh scripts/package-macos.sh
+          ditto -c -k --keepParent dist/MiyuLaTeX.app "${{ matrix.asset }}"
+      - if: runner.os == 'Linux'
+        run: |
+          cargo build --release
+          tar -czf "${{ matrix.asset }}" -C target/release miyu -C ../.. README.md LICENSE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - run: gh release create "$GITHUB_REF_NAME" MiyuLaTeX-macos-arm64.zip miyu-linux-x86_64.tar.gz --repo "$GITHUB_REPOSITORY" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

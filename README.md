@@ -27,6 +27,11 @@ open dist/MiyuLaTeX.app
 El paquete incluye el icono de `assets/icon.png`, convertido a
 `assets/icon.icns`. Puedes copiar `dist/MiyuLaTeX.app` a Aplicaciones.
 
+Al publicar una etiqueta `vX.Y.Z`, el flujo `release.yml` de GitHub Actions
+compila la app de macOS (Apple Silicon) y el binario de Linux y los adjunta a
+la versión. La app va firmada solo de forma local, sin certificado de Apple:
+la primera vez hay que abrirla con clic derecho y Abrir.
+
 Para compilar documentos LaTeX necesitas un motor LaTeX. Miyu detecta `tectonic`, `latexmk`, `pdflatex`,
 `xelatex` y `lualatex`, en ese orden. Puedes elegir uno en Preferencias.
 
