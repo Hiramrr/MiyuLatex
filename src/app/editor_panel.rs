@@ -646,6 +646,37 @@ impl App {
             _ => false,
         }
     }
+    /// Inserta la imagen del portapapeles, por ejemplo una captura de pantalla.
+    pub(super) fn paste_image(&mut self) {
+        let image = arboard::Clipboard::new()
+            .and_then(|mut clipboard| clipboard.get_image())
+            .ok()
+            .and_then(|data| {
+                image::RgbaImage::from_raw(
+                    data.width as u32,
+                    data.height as u32,
+                    data.bytes.into_owned(),
+                )
+            });
+        match image {
+            Some(image) => self.insert_pasted(&image),
+            None => self.message = "El portapapeles no tiene una imagen".into(),
+        }
+    }
+    /// Guarda `image` como PNG en `images/` y la inserta en el cursor.
+    pub(super) fn insert_pasted(&mut self, image: &image::RgbaImage) {
+        let file = std::env::temp_dir().join(format!("miyu-pegada-{}.png", std::process::id()));
+        if !self.accepts_image(&file) {
+            self.message =
+                "Para pegar una imagen, guarda antes el documento LaTeX o Markdown".into();
+            return;
+        }
+        match image.save(&file) {
+            Ok(()) => self.insert_image(&file),
+            Err(e) => self.message = format!("No pude guardar la imagen: {e}"),
+        }
+        let _ = fs::remove_file(&file);
+    }
     /// Inserta `file` como figura de LaTeX o imagen de Markdown. Si está fuera
     /// de la carpeta del documento, o su ruta no sirve en LaTeX, se copia a
     /// `images/`.

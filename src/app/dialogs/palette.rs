@@ -48,6 +48,7 @@ pub(in crate::app) enum Command {
     Symbol,
     Table,
     Figure,
+    PasteImage,
     Reference,
     Citation,
     CheckBibliography,
@@ -214,6 +215,12 @@ impl App {
                 "",
                 latex && saved_source,
                 Command::Figure,
+            ),
+            (
+                "Pegar imagen del portapapeles",
+                "",
+                self.accepts_image(Path::new("x.png")),
+                Command::PasteImage,
             ),
             (
                 "Insertar cita o referencia LaTeX…",
@@ -385,6 +392,7 @@ impl App {
             Command::Symbol => self.symbols = true,
             Command::Table => self.table.open = true,
             Command::Figure => self.insert_figure(),
+            Command::PasteImage => self.paste_image(),
             Command::Reference => {
                 self.references = true;
                 self.outline = false;

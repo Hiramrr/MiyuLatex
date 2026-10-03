@@ -144,6 +144,8 @@ pub struct App {
     find: bool,
     focus_find: bool,
     focus_pdf_find: bool,
+    /// El último Cmd+V pegó texto; ver `editor_keys`.
+    pasted_text: bool,
     query: String,
     replacement: String,
     goto: bool,
@@ -254,6 +256,7 @@ impl App {
             find: false,
             focus_find: false,
             focus_pdf_find: false,
+            pasted_text: false,
             query: String::new(),
             replacement: String::new(),
             goto: false,

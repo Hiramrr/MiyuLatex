@@ -193,6 +193,10 @@ impl App {
                         self.insert_figure();
                         ui.close();
                     }
+                    if action(ui, "Pegar imagen del portapapeles", self.accepts_image(Path::new("x.png")), "Guarda la imagen copiada, por ejemplo una captura de pantalla, en images/ y la inserta en el cursor. También con Cmd/Ctrl+V si el portapapeles no tiene texto. Requiere un documento LaTeX o Markdown guardado.").clicked() {
+                        self.paste_image();
+                        ui.close();
+                    }
                     if action(ui, "Cita o referencia LaTeX…", latex, "Abre las etiquetas y la bibliografía del proyecto para insertar una referencia o una cita. Disponible en LaTeX.").clicked() {
                         self.references = true;
                         self.outline = false;

@@ -103,6 +103,29 @@ impl App {
             return;
         }
         let mut changed = false;
+        // egui solo pega texto: con una imagen en el portapapeles no avisa de
+        // nada al pulsar, y al soltar la V se sabe que no llegó ningún texto.
+        let (pasted, released) = ctx.input(|input| {
+            let pasted = input
+                .events
+                .iter()
+                .any(|event| matches!(event, egui::Event::Paste(_)));
+            let released = input.events.iter().any(|event| {
+                matches!(
+                    event,
+                    egui::Event::Key { key: Key::V, pressed: false, modifiers, .. }
+                        if modifiers.command && !modifiers.shift
+                )
+            });
+            (pasted, released)
+        });
+        self.pasted_text |= pasted;
+        if released
+            && !std::mem::take(&mut self.pasted_text)
+            && self.accepts_image(Path::new("x.png"))
+        {
+            self.paste_image();
+        }
         if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::Z)
             || Self::shortcut(ctx, Modifiers::COMMAND, Key::Y)
         {

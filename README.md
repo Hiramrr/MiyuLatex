@@ -56,7 +56,10 @@ y Abrir proyecto permite elegir una carpeta existente. Abrir archivo acepta
 texto, código, PDF e imágenes. También puedes arrastrarlos a la ventana.
 Si el documento activo es LaTeX o Markdown y ya está guardado, una imagen
 arrastrada se inserta en el cursor como figura o como imagen de Markdown, y
-se copia a `images/` cuando está fuera de la carpeta del documento.
+se copia a `images/` cuando está fuera de la carpeta del documento. Pegar
+imagen del portapapeles, en Insertar, hace lo mismo con una imagen copiada,
+por ejemplo una captura de pantalla; `Cmd+V` también la pega cuando el
+portapapeles no tiene texto.
 Los botones explican su acción al pasar el cursor. Las acciones que requieren
 un documento editable, un PDF o una compilación en curso se desactivan cuando
 no están disponibles. Los archivos y el esquema están a la izquierda,

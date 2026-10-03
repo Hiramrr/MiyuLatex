@@ -920,6 +920,15 @@ fn renames_labels_and_inserts_dropped_images() {
         app.editor().text(),
         "# Notas\n![](images/figura-1.png)![](images/figura-2.png)"
     );
+    // Una imagen pegada se guarda como PNG junto a las demás.
+    let end = app.editor().end();
+    app.editor_mut().goto(end.row, end.col);
+    app.insert_pasted(&image::RgbaImage::new(3, 2));
+    assert!(app.editor().text().ends_with("![](images/figura-3.png)"));
+    assert_eq!(
+        image::image_dimensions(folder.join("images/figura-3.png")).unwrap(),
+        (3, 2)
+    );
     // En código, soltar una imagen la abre como siempre.
     fs::write(folder.join("main.rs"), "fn main() {}\n").unwrap();
     app.open(&folder.join("main.rs")).unwrap();
