@@ -1416,8 +1416,16 @@ impl App {
         let compiling = self.compile_rx.is_some();
         let tool_ready = self.tool_rx.is_none();
         let has_pdf = self.pdf_path().is_some();
-        egui::Panel::top("toolbar").show(ui, |ui| {
-            egui::MenuBar::new().ui(ui, |ui| {
+        egui::Panel::top("toolbar")
+            .frame(egui::Frame::side_top_panel(ui.style()).fill(col(self.theme.surface)).inner_margin(egui::Margin::symmetric(8, 4)))
+            .show(ui, |ui| {
+            ui.spacing_mut().button_padding = egui::vec2(8.0, 4.0);
+            ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
+            egui::MenuBar::new().style(|style: &mut egui::Style| {
+                egui::containers::menu::menu_style(style);
+                style.spacing.button_padding = egui::vec2(8.0, 2.0);
+                style.spacing.interact_size.y = 26.0;
+            }).ui(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                 ui.menu_button("Archivo", |ui| {
                     if action(ui, "Nuevo documento…", true, "Abre un documento sin guardar. Cmd/Ctrl+N.").clicked() {
@@ -1455,6 +1463,17 @@ impl App {
                         ui.close();
                     }
                     ui.separator();
+                    if action(ui, "Exportar PDF…", has_pdf, "Guarda una copia del PDF del documento activo. Abre un PDF o compila un documento LaTeX primero.").clicked() {
+                        self.export_pdf();
+                        ui.close();
+                    }
+                    ui.separator();
+                    if action(ui, "Salir", true, "Cierra la aplicación y pregunta si hay cambios sin guardar. Cmd/Ctrl+Q.").clicked() {
+                        self.request_close(Pending::Quit, &ctx);
+                        ui.close();
+                    }
+                });
+                ui.menu_button("Proyecto", |ui| {
                     if action(ui, "Nuevo proyecto…", true, "Crea una carpeta de proyecto vacía, con código o con una plantilla. Cmd/Ctrl+Mayús+N.").clicked() {
                         self.new_project();
                         ui.close();
@@ -1479,15 +1498,6 @@ impl App {
                     }
                     if action(ui, "Exportar proyecto ZIP…", tool_ready, "Guarda los cambios y copia el proyecto a un ZIP. Espera si hay otra operación en curso.").clicked() {
                         self.export_project(&ctx);
-                        ui.close();
-                    }
-                    if action(ui, "Exportar PDF…", has_pdf, "Guarda una copia del PDF del documento activo. Abre un PDF o compila un documento LaTeX primero.").clicked() {
-                        self.export_pdf();
-                        ui.close();
-                    }
-                    ui.separator();
-                    if action(ui, "Salir", true, "Cierra la aplicación y pregunta si hay cambios sin guardar. Cmd/Ctrl+Q.").clicked() {
-                        self.request_close(Pending::Quit, &ctx);
                         ui.close();
                     }
                 });
@@ -1639,7 +1649,7 @@ impl App {
                         ui.close();
                     }
                 });
-                if action(ui, "Preferencias…", true, "Configura el editor y la apariencia para todos los proyectos. Cmd/Ctrl+,.").clicked() { self.settings = true; }
+                if action(ui, "Preferencias", true, "Configura el editor y la apariencia para todos los proyectos. Cmd/Ctrl+,.").clicked() { self.settings = true; }
                 if action(ui, "Ayuda", true, "Consulta las funciones y los atajos de teclado. F1.").clicked() { self.help = true; }
                 });
             });
@@ -1647,20 +1657,23 @@ impl App {
             ui.horizontal_wrapped(|ui| {
                 self.sidebar_toggle(ui);
                 ui.separator();
-                if action(ui, "Nuevo documento…", true, "Crea un documento sin guardar. Cmd/Ctrl+N.").clicked() { self.templates = true; }
-                if action(ui, "Abrir archivo…", true, "Abre un documento, código, PDF o imagen. Cmd/Ctrl+O.").clicked() { self.open_dialog(); }
-                if action(ui, "Guardar", editable, "Guarda la pestaña activa. Cmd/Ctrl+S. PDF e imágenes son de solo lectura.").clicked() { self.save_document(self.active, false); }
+                if toolbar_action(ui, "Nuevo", "Nuevo documento…", true, "Crea un documento sin guardar. Cmd/Ctrl+N.").clicked() { self.templates = true; }
+                if toolbar_action(ui, "Abrir", "Abrir archivo…", true, "Abre un documento, código, PDF o imagen. Cmd/Ctrl+O.").clicked() { self.open_dialog(); }
+                if toolbar_action(ui, "Guardar", "Guardar", editable, "Guarda la pestaña activa. Cmd/Ctrl+S. PDF e imágenes son de solo lectura.").clicked() { self.save_document(self.active, false); }
                 ui.separator();
-                if action(ui, "Nuevo proyecto…", true, "Crea una carpeta de proyecto. Cmd/Ctrl+Mayús+N.").clicked() { self.new_project(); }
-                if action(ui, "Abrir proyecto…", true, "Abre una carpeta de proyecto existente.").clicked() { self.folder_dialog(); }
-                ui.separator();
-                if action(ui, "Compilar", !compiling && (latex || saved_source), "Guarda los archivos LaTeX y genera el PDF. F5 o Cmd/Ctrl+R. Disponible en LaTeX.").clicked() { self.compile(false, &ctx); }
                 if compiling {
                     ui.spinner();
                     if action(ui, "Detener compilación", !self.cancel.load(Ordering::Relaxed), "Detiene la compilación en curso. Espera mientras el motor termina de detenerse.").clicked() {
                         self.cancel.store(true, Ordering::Relaxed);
                         self.message = "Deteniendo la compilación…".into();
                     }
+                } else {
+                    let response = ui.add_enabled(latex || saved_source, egui::Button::new("Compilar")
+                        .fill(col(theme::mix(self.theme.surface, self.theme.primary, 0.18)))
+                        .stroke(Stroke::new(1.0, col(self.theme.primary))))
+                        .on_hover_text("Guarda los archivos LaTeX y genera el PDF. F5 o Cmd/Ctrl+R.")
+                        .on_disabled_hover_text("Abre o crea un documento LaTeX para compilar su PDF.");
+                    if response.clicked() { self.compile(false, &ctx); }
                 }
                 if self.tool_rx.is_some() { ui.spinner(); }
                 if let Some(root) = self.root() {
@@ -1677,63 +1690,65 @@ impl App {
             .min_size(160.0)
             .show(ui, |ui| self.sidebar_content(ui));
     }
-    /// Botón que oculta o muestra el panel lateral; la flecha apunta hacia
-    /// donde se moverá el panel.
+    /// El estado del botón indica si el panel lateral está visible.
     fn sidebar_toggle(&mut self, ui: &mut egui::Ui) {
         let shown = self.config.show_sidebar;
-        let arrow = if shown == self.config.sidebar_right {
-            "»"
-        } else {
-            "«"
-        };
         let (label, help) = if shown {
             (
-                format!("{arrow} Ocultar panel"),
+                "Ocultar panel lateral",
                 "Oculta el panel de archivos, esquema y referencias. F2.",
             )
         } else {
             (
-                format!("{arrow} Mostrar panel"),
+                "Mostrar panel lateral",
                 "Muestra el panel de archivos, esquema y referencias. F2.",
             )
         };
-        if action(ui, &label, true, help).clicked() {
+        let response = ui
+            .add(
+                egui::Button::new("Panel")
+                    .selected(shown)
+                    .frame_when_inactive(shown),
+            )
+            .on_hover_text(help);
+        response.widget_info(|| {
+            egui::WidgetInfo::selected(egui::WidgetType::Button, true, shown, label)
+        });
+        if response.clicked() {
             self.config.show_sidebar = !shown;
             self.preferences_changed(ui.ctx());
         }
     }
     fn sidebar_content(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
-            let close = action(ui, "×", true, "Oculta el panel de archivos, esquema y referencias. Mostrar panel o F2 vuelve a abrirlo.");
-            close.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, close.enabled(), "Ocultar panel lateral"));
-            if close.clicked() {
-                self.config.show_sidebar = false;
-                self.preferences_changed(ui.ctx());
-            }
-            if ui
-                .selectable_label(!self.outline && !self.references, "Archivos")
-                .on_hover_text("Explora y gestiona los archivos de la carpeta del proyecto.")
-                .clicked()
-            {
-                self.outline = false;
-                self.references = false;
-            }
-            if ui
-                .selectable_label(self.outline, "Esquema")
-                .on_hover_text("Ve a una sección o definición del documento.")
-                .clicked()
-            {
-                self.outline = true;
-                self.references = false;
-            }
-            if ui
-                .selectable_label(self.references, "Referencias")
-                .on_hover_text("Inserta citas y referencias LaTeX o abre sus definiciones.")
-                .clicked()
-            {
-                self.outline = false;
-                self.references = true;
-            }
+        ui.scope(|ui| {
+            ui.spacing_mut().button_padding = egui::vec2(5.0, 4.0);
+            ui.spacing_mut().item_spacing.x = 2.0;
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .selectable_label(!self.outline && !self.references, "Archivos")
+                    .on_hover_text("Explora y gestiona los archivos de la carpeta del proyecto.")
+                    .clicked()
+                {
+                    self.outline = false;
+                    self.references = false;
+                }
+                if ui
+                    .selectable_label(self.outline, "Esquema")
+                    .on_hover_text("Ve a una sección o definición del documento.")
+                    .clicked()
+                {
+                    self.outline = true;
+                    self.references = false;
+                }
+                if ui
+                    .selectable_label(self.references, "Referencias")
+                    .on_hover_text("Inserta citas y referencias LaTeX o abre sus definiciones.")
+                    .clicked()
+                {
+                    self.outline = false;
+                    self.references = true;
+                }
+            });
         });
         ui.separator();
         if self.references {
@@ -2536,9 +2551,12 @@ impl App {
             .show(ui, |ui| {
                 let mut close = None;
                 egui::Frame::new()
-                    .fill(self.panel_fill())
-                    .inner_margin(8.0)
+                    .fill(col(self.theme.surface))
+                    .inner_margin(egui::Margin::symmetric(8, 4))
                     .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.spacing_mut().button_padding = egui::vec2(6.0, 4.0);
+                        ui.spacing_mut().item_spacing.x = 4.0;
                         ScrollArea::horizontal().id_salt("tabs").show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 let mut activate = None;
@@ -2549,11 +2567,14 @@ impl App {
                                         if doc.editor.dirty() { " *" } else { "" }
                                     );
                                     ui.push_id(doc.id, |ui| {
-                                        if ui.selectable_label(i == self.active, label)
-                                            .on_hover_text(doc.editor.path.as_ref().map_or_else(|| "Documento sin guardar".into(), |p| p.display().to_string()))
-                                            .clicked() { activate = Some(i); }
+                                        let tab = ui.selectable_label(i == self.active, label)
+                                            .on_hover_text(doc.editor.path.as_ref().map_or_else(|| "Documento sin guardar".into(), |p| p.display().to_string()));
+                                        if i == self.active {
+                                            ui.painter().line_segment([tab.rect.left_bottom(), tab.rect.right_bottom()], Stroke::new(2.0, col(self.theme.primary)));
+                                        }
+                                        if tab.clicked() { activate = Some(i); }
                                         let name = format!("Cerrar {}", doc.editor.title());
-                                        let response = ui.button("×").on_hover_text(&name);
+                                        let response = ui.add(egui::Button::new("×").frame_when_inactive(false)).on_hover_text(&name);
                                         response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
                                         if response.clicked() { close = Some(i); }
                                     });
@@ -3836,6 +3857,21 @@ fn action(ui: &mut egui::Ui, label: &str, enabled: bool, help: &str) -> egui::Re
         .on_disabled_hover_text(help)
 }
 
+/// Etiquetas breves en la barra, con el nombre completo para accesibilidad.
+fn toolbar_action(
+    ui: &mut egui::Ui,
+    label: &str,
+    name: &str,
+    enabled: bool,
+    help: &str,
+) -> egui::Response {
+    let response = ui.add_enabled(enabled, egui::Button::new(label).frame_when_inactive(false));
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, response.enabled(), name)
+    });
+    response.on_hover_text(help).on_disabled_hover_text(help)
+}
+
 /// Panel lateral en el lado elegido en Ver. Si los dos comparten lado, el de
 /// archivos queda en el borde de la ventana porque se dibuja primero.
 fn side_panel(id: &'static str, right: bool) -> egui::Panel {
@@ -4298,13 +4334,24 @@ mod tests {
         app.config.show_sidebar = false;
         app.backdrop = Backdrop::default();
 
+        // The compact toggle exposes its state and project actions stay together.
+        click(&mut app, &ctx, "Mostrar panel lateral");
+        assert!(app.config.show_sidebar);
+        click(&mut app, &ctx, "Ocultar panel lateral");
+        assert!(!app.config.show_sidebar);
+        click(&mut app, &ctx, "Proyecto");
+        assert!(!button(&mut app, &ctx, "Nuevo proyecto…").is_disabled());
+        assert!(!button(&mut app, &ctx, "Abrir carpeta de proyecto…").is_disabled());
+        assert!(!button(&mut app, &ctx, "Importar proyecto ZIP…").is_disabled());
+        click(&mut app, &ctx, "Proyecto");
+
         // Project settings and app preferences open different windows.
         click(&mut app, &ctx, "LaTeX");
         click(&mut app, &ctx, "Configurar proyecto LaTeX…");
         assert!(app.project_options && !app.settings);
         click(&mut app, &ctx, "Cerrar configuración");
         assert!(!app.project_options);
-        click(&mut app, &ctx, "Preferencias…");
+        click(&mut app, &ctx, "Preferencias");
         assert!(app.settings && !app.project_options);
         click(&mut app, &ctx, "Cerrar preferencias");
         assert!(!app.settings);
@@ -4401,10 +4448,9 @@ mod tests {
             "Nuevo documento…",
             "Abrir archivo…",
             "Guardar",
-            "Nuevo proyecto…",
-            "Abrir proyecto…",
+            "Proyecto",
             "Compilar",
-            "Preferencias…",
+            "Preferencias",
             "Ayuda",
         ] {
             let node = nodes

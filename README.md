@@ -53,11 +53,13 @@ Los botones explican su acción al pasar el cursor. Las acciones que requieren
 un documento editable, un PDF o una compilación en curso se desactivan cuando
 no están disponibles. Los archivos y el esquema están a la izquierda,
 las pestañas del editor en el centro y la vista previa a la derecha. El menú Ver
-permite ocultar cada panel o pasarlo al otro lado de la ventana. Mostrar panel
-vuelve a abrir el panel lateral. La barra de botones se ajusta al ancho de la
-ventana. Los problemas de compilación abren el archivo en su línea.
+permite ocultar cada panel o pasarlo al otro lado de la ventana. El botón Panel
+muestra u oculta el panel lateral y señala si está abierto. La barra superior
+tiene un fondo sólido y agrupa las acciones de documentos. El menú Proyecto
+reúne la creación, apertura e intercambio de proyectos. La barra se ajusta al
+ancho de la ventana. Los problemas de compilación abren el archivo en su línea.
 
-Nuevo proyecto, en la barra de herramientas o en Archivo, crea una carpeta
+Nuevo proyecto, en el menú Proyecto, crea una carpeta
 con el nombre y la ubicación que elijas. Puedes dejarla vacía, usar una
 plantilla LaTeX o crear un archivo de código vacío para Python, Rust,
 JavaScript, TypeScript, C, C++ o Go. El proyecto se abre al crearlo y aparece
@@ -151,8 +153,8 @@ Al cerrar un documento modificado, pide guardar o descartar los cambios.
 
 ## Proyectos LaTeX
 
-Archivo importa y exporta el proyecto como ZIP, compatible con Overleaf, y
-exporta el PDF compilado. Añadir archivos copia imágenes, bibliografías u
+Proyecto importa y exporta el proyecto como ZIP, compatible con Overleaf.
+Archivo exporta el PDF compilado. Añadir archivos copia imágenes, bibliografías u
 otros fuentes a la carpeta del proyecto.
 
 El panel Referencias lista las etiquetas y las citas de todo el proyecto para
