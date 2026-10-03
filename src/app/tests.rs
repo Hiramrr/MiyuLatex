@@ -715,3 +715,23 @@ fn clicking_below_the_text_moves_the_cursor_to_the_end() {
     assert!(ctx.memory(|m| m.has_focus(app.documents[app.active].id)));
     fs::remove_dir_all(folder).unwrap();
 }
+
+#[test]
+fn history_window_opens_only_for_saved_latex() {
+    let folder = std::env::temp_dir().join(format!("miyu-history-gui-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("main.tex");
+    fs::write(&path, "nuevo").unwrap();
+    latex::checkpoint(&path, "viejo").unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(path), &ctx).unwrap();
+    app.show_history();
+    tick(&mut app, &ctx, vec![]);
+    assert!(app.history.is_some());
+    app.new_document(0);
+    app.history = None;
+    app.show_history();
+    assert!(app.history.is_none());
+    assert!(!app.message.is_empty());
+    fs::remove_dir_all(folder).unwrap();
+}

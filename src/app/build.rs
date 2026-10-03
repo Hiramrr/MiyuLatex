@@ -345,17 +345,10 @@ impl App {
             self.message = "Guarda el archivo LaTeX antes de ver su historial".into();
             return;
         };
-        self.history_versions = latex::versions(&path);
-        self.history_index = 0;
-        self.history_text = match self.history_versions.first().map(fs::read_to_string) {
-            Some(Ok(text)) => Some(text),
-            Some(Err(e)) => {
-                self.message = format!("No pude leer la versión: {e}");
-                None
-            }
-            None => None,
-        };
-        self.history_file = Some(path);
-        self.history = true;
+        let (history, read) = dialogs::History::new(path);
+        if let Err(e) = read {
+            self.message = e;
+        }
+        self.history = Some(history);
     }
 }

@@ -6,6 +6,8 @@ mod insert;
 mod project;
 mod settings;
 
+pub(super) use project::History;
+
 impl App {
     pub(super) fn dialogs(&mut self, ctx: &egui::Context) {
         self.project_search_dialog(ctx);
