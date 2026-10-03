@@ -111,6 +111,14 @@ Las flechas eligen una sugerencia, Tab la inserta y Esc cierra la lista;
 Ctrl+Espacio la abre sin haber escrito nada. Copiar o cortar sin selección toma la línea
 entera. Deshacer agrupa las letras escritas seguidas.
 
+El editor admite varios cursores. `Cmd+D` selecciona la palabra y, al
+repetirlo, añade su siguiente aparición; `Cmd+Alt+↑` y `Cmd+Alt+↓` añaden un
+cursor en la línea de arriba o de abajo, y `Alt`+clic lo pone donde señales.
+Lo que escribas, pegues o borres se aplica en todos, igual que las flechas,
+Inicio y Fin; copiar toma todas las selecciones, una por línea. Esc o un clic
+normal vuelven a un solo cursor. Con varios cursores no se cierran pares ni
+se ofrecen sugerencias.
+
 Formatear documento (`Cmd+Shift+I`), en Editar, pasa el texto por la
 herramienta del lenguaje si está instalada: `latexindent` para LaTeX,
 `rustfmt`, `gofmt`, `ruff` para Python, `clang-format` para C, C++ y Java, y
@@ -174,7 +182,8 @@ Abre y guarda otros lenguajes con su extensión.
 | `Cmd+Shift+D` / `Alt+Shift+↓` | Duplicar las líneas seleccionadas |
 | `Cmd+Shift+K` / `Cmd+L` | Borrar / seleccionar líneas enteras |
 | `Cmd+Enter` / `Cmd+Shift+Enter` | Abrir una línea debajo / encima |
-| `Cmd+D` | Seleccionar la palabra o su siguiente aparición |
+| `Cmd+D` | Seleccionar la palabra y añadir su siguiente aparición |
+| `Cmd+Alt+↑` / `Cmd+Alt+↓` / `Alt`+clic | Añadir un cursor |
 | `Cmd+Shift+\` / `Ctrl+M` | Ir al corchete emparejado |
 | `Cmd+Z` / `Cmd+Shift+Z` | Deshacer / rehacer |
 | `Cmd+C` / `Cmd+X` / `Cmd+V` | Copiar, cortar y pegar |

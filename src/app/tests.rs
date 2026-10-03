@@ -1085,3 +1085,40 @@ fn previews_the_equation_under_the_cursor() {
     assert!(!app.equation.open);
     fs::remove_dir_all(folder).unwrap();
 }
+
+#[test]
+fn types_with_several_cursors() {
+    let folder = std::env::temp_dir().join(format!("miyu-cursores-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("lista.txt");
+    fs::write(&path, "uno\ndos\ntres").unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(path), &ctx).unwrap();
+    app.backdrop = Backdrop::default();
+    app.config.completions = false;
+    tick(&mut app, &ctx, vec![]);
+    tick(&mut app, &ctx, vec![]);
+    let both = Modifiers::COMMAND | Modifiers::ALT;
+    tick(&mut app, &ctx, vec![key(Key::ArrowDown, both)]);
+    tick(&mut app, &ctx, vec![key(Key::ArrowDown, both)]);
+    assert_eq!(app.editor().extras().len(), 2);
+    // Las letras y el borrado llegan a los tres cursores.
+    tick(&mut app, &ctx, vec![egui::Event::Text("- ".into())]);
+    assert_eq!(app.editor().text(), "- uno\n- dos\n- tres");
+    tick(&mut app, &ctx, vec![key(Key::Backspace, Modifiers::NONE)]);
+    tick(&mut app, &ctx, vec![key(Key::End, Modifiers::NONE)]);
+    tick(&mut app, &ctx, vec![egui::Event::Text(";".into())]);
+    assert_eq!(app.editor().text(), "-uno;\n-dos;\n-tres;");
+    assert!(app.editor().dirty());
+    // Esc deja un solo cursor, que sigue donde estaba el principal.
+    tick(&mut app, &ctx, vec![key(Key::Escape, Modifiers::NONE)]);
+    assert!(app.editor().extras().is_empty());
+    tick(&mut app, &ctx, vec![]);
+    tick(&mut app, &ctx, vec![egui::Event::Text("!".into())]);
+    assert_eq!(app.editor().text(), "-uno;\n-dos;\n-tres;!");
+    // Deshacer devuelve el texto anterior a cada edición múltiple.
+    tick(&mut app, &ctx, vec![key(Key::Z, Modifiers::COMMAND)]);
+    tick(&mut app, &ctx, vec![key(Key::Z, Modifiers::COMMAND)]);
+    assert_eq!(app.editor().text(), "-uno\n-dos\n-tres");
+    fs::remove_dir_all(folder).unwrap();
+}

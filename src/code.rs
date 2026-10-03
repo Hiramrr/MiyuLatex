@@ -185,7 +185,7 @@ impl Editor {
             .collect()
     }
     /// Coloca el cursor (y el ancla) sin editar el texto.
-    fn place(&mut self, cursor: Pos, anchor: Option<Pos>) {
+    pub(super) fn place(&mut self, cursor: Pos, anchor: Option<Pos>) {
         self.cursor = cursor;
         self.anchor = anchor.filter(|anchor| *anchor != cursor);
         self.selected = None;

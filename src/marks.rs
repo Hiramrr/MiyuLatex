@@ -25,6 +25,7 @@ pub struct Marks {
     occurrence: Color32,
     bracket: Color32,
     guide: Color32,
+    caret: Color32,
 }
 
 impl Marks {
@@ -55,6 +56,7 @@ impl Marks {
             occurrence: col(theme.fg).gamma_multiply(0.13),
             bracket: col(theme.accent),
             guide: col(theme.border).gamma_multiply(0.7),
+            caret: col(theme.fg),
         }
     }
 
@@ -93,6 +95,22 @@ impl Marks {
                 ));
             }
         }
+        // Cursores adicionales: su barra y, más abajo, su selección.
+        for (_, cursor) in editor.extras() {
+            let end = column + glyphs.len();
+            if cursor.row == line && (column..=end).contains(&cursor.col) {
+                let x = match glyphs.get(cursor.col - column) {
+                    Some(glyph) => rect.left() + glyph.pos.x,
+                    None => glyphs
+                        .last()
+                        .map_or(rect.left(), |g| rect.left() + g.pos.x + g.advance_width),
+                };
+                shapes.push(Shape::line_segment(
+                    [egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())],
+                    Stroke::new(1.5, self.caret),
+                ));
+            }
+        }
         if glyphs.is_empty() {
             return;
         }
@@ -114,6 +132,16 @@ impl Marks {
             let end = if line == b.row { b.col } else { usize::MAX };
             if let Some(area) = span(start, end) {
                 shapes.push(Shape::rect_filled(area, 2.0, self.current));
+            }
+        }
+        for (anchor, cursor) in editor.extras() {
+            let (a, b) = (*anchor.min(cursor), *anchor.max(cursor));
+            if a != b && (a.row..=b.row).contains(&line) {
+                let start = if line == a.row { a.col } else { 0 };
+                let end = if line == b.row { b.col } else { usize::MAX };
+                if let Some(area) = span(start, end) {
+                    shapes.push(Shape::rect_filled(area, 2.0, self.current));
+                }
             }
         }
         if self.search {

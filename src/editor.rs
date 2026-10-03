@@ -25,6 +25,8 @@ use crate::{
 pub mod code;
 #[path = "complete.rs"]
 mod complete;
+#[path = "cursors.rs"]
+pub mod cursors;
 
 #[derive(Deserialize)]
 pub struct Command {
@@ -113,6 +115,8 @@ pub struct Editor {
     pub saved: String,
     pub cursor: Pos,
     pub anchor: Option<Pos>,
+    /// Cursores adicionales y la revisión del texto para la que valen.
+    extras: (u64, Vec<(Pos, Pos)>),
     /// Se calcula al pedirlo y se descarta con cada edición.
     outline: OnceCell<Vec<(usize, usize, String)>>,
     pub matches: Vec<(Pos, Pos)>,
@@ -167,6 +171,7 @@ impl Editor {
             saved: text,
             cursor: Pos::default(),
             anchor: None,
+            extras: (0, Vec::new()),
             outline: OnceCell::new(),
             matches: Vec::new(),
             query: String::new(),

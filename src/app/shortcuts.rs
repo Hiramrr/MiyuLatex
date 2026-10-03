@@ -156,7 +156,15 @@ impl App {
             self.editor_mut().duplicate_lines();
             changed = true;
         } else if Self::shortcut(ctx, Modifiers::COMMAND, Key::D) {
-            moved |= self.editor_mut().select_next();
+            moved |= self.editor_mut().select_next_also();
+        }
+        // Con Cmd y Alt se añade un cursor; solo con Alt se mueven las líneas.
+        let both = Modifiers::COMMAND | Modifiers::ALT;
+        if Self::shortcut(ctx, both, Key::ArrowUp) {
+            moved |= self.editor_mut().add_cursor_vertical(true);
+        }
+        if Self::shortcut(ctx, both, Key::ArrowDown) {
+            moved |= self.editor_mut().add_cursor_vertical(false);
         }
         if Self::shortcut(ctx, Modifiers::ALT, Key::ArrowUp) {
             changed |= self.editor_mut().move_lines(true);
@@ -193,6 +201,9 @@ impl App {
                 self.editor_mut().smart_home(select);
                 moved = true;
             }
+        }
+        if !self.editor().extras().is_empty() && self.cursor_keys(ctx) {
+            changed = true;
         }
         if moved {
             self.sync_cursor = true;
@@ -344,6 +355,80 @@ impl App {
             }
             self.changed_editor();
         }
+    }
+    /// Con varios cursores, las teclas de edición y de movimiento no llegan
+    /// al widget de texto: se aplican aquí en todos a la vez. Devuelve si
+    /// cambió el texto.
+    fn cursor_keys(&mut self, ctx: &egui::Context) -> bool {
+        use crate::editor::cursors::{Edit, Move};
+        let mut taken = Vec::new();
+        ctx.input_mut(|input| {
+            input.events.retain(|event| {
+                let ours = match event {
+                    egui::Event::Text(_) | egui::Event::Paste(_) => true,
+                    egui::Event::Copy | egui::Event::Cut => true,
+                    egui::Event::Key {
+                        key,
+                        pressed: true,
+                        modifiers,
+                        ..
+                    } => {
+                        let plain = modifiers.is_none() || *modifiers == Modifiers::SHIFT;
+                        match key {
+                            Key::Backspace | Key::Delete | Key::Enter | Key::Tab | Key::Escape => {
+                                modifiers.is_none()
+                            }
+                            Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown => {
+                                plain
+                            }
+                            Key::Home | Key::End => plain,
+                            _ => false,
+                        }
+                    }
+                    _ => false,
+                };
+                if ours {
+                    taken.push(event.clone());
+                }
+                !ours
+            })
+        });
+        let mut changed = false;
+        for event in taken {
+            let editor = self.editor_mut();
+            let mut edit = |editor: &mut Editor, edit: Edit| {
+                editor.edit_cursors(edit);
+                changed = true;
+            };
+            match event {
+                egui::Event::Text(text) | egui::Event::Paste(text) => {
+                    edit(editor, Edit::Insert(&text));
+                }
+                egui::Event::Copy => ctx.copy_text(editor.selected_all()),
+                egui::Event::Cut => {
+                    ctx.copy_text(editor.selected_all());
+                    edit(editor, Edit::Insert(""));
+                }
+                egui::Event::Key { key, modifiers, .. } => match key {
+                    Key::Backspace => edit(editor, Edit::Backspace),
+                    Key::Delete => edit(editor, Edit::Delete),
+                    Key::Enter => edit(editor, Edit::Newline),
+                    Key::Tab => edit(editor, Edit::Indent),
+                    Key::Escape => editor.clear_extras(),
+                    Key::ArrowLeft => editor.move_cursors(Move::Left, modifiers.shift),
+                    Key::ArrowRight => editor.move_cursors(Move::Right, modifiers.shift),
+                    Key::ArrowUp => editor.move_cursors(Move::Up, modifiers.shift),
+                    Key::ArrowDown => editor.move_cursors(Move::Down, modifiers.shift),
+                    Key::Home => editor.move_cursors(Move::Home, modifiers.shift),
+                    Key::End => editor.move_cursors(Move::End, modifiers.shift),
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+        // El widget conserva su cursor: se le lleva el del editor.
+        self.sync_cursor = true;
+        changed
     }
     pub(super) fn start_find(&mut self) {
         if self.editor().format == Format::Pdf {

@@ -280,6 +280,10 @@ impl App {
                             let under_text = ui.painter().add(egui::Shape::Noop);
                             let mut under = Vec::new();
                             ui.add_space(gutter);
+                            let before = (
+                                doc.editor.anchor.unwrap_or(doc.editor.cursor),
+                                doc.editor.cursor,
+                            );
                             let output = TextEdit::multiline(&mut doc.editor)
                                 .id(doc.id)
                                 .font(FontId::monospace(size))
@@ -308,6 +312,12 @@ impl App {
                                 }
                                 self.focus_editor = false;
                             }
+                            // Alt y clic añade un cursor; cualquier otro clic deja uno solo.
+                            let alt = ui.input(|i| i.modifiers.alt);
+                            let add_cursor = alt && output.response.clicked();
+                            if output.response.is_pointer_button_down_on() && !alt {
+                                doc.editor.clear_extras();
+                            }
                             let changed = doc.editor.take_touched();
                             if changed {
                                 self.edited_at = (format == Format::Latex
@@ -323,6 +333,9 @@ impl App {
                             if let Some(range) = output.cursor_range {
                                 doc.editor
                                     .select(range.primary.index.0, range.secondary.index.0);
+                                if add_cursor {
+                                    doc.editor.add_cursor(before.0, before.1);
+                                }
                                 let cursor_rect = output.galley.pos_from_cursor(range.primary);
                                 let cursor_rect =
                                     cursor_rect.translate(output.galley_pos.to_vec2());

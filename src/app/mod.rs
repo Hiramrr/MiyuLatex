@@ -371,6 +371,10 @@ impl App {
                         });
                     }
                     details.extend(marks::selection_summary(self.editor()));
+                    let extras = self.editor().extras().len();
+                    if extras > 0 {
+                        details.push(format!("{} cursores", extras + 1));
+                    }
                     for detail in details {
                         ui.label(
                             RichText::new(detail)
