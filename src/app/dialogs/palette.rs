@@ -21,6 +21,10 @@ pub(in crate::app) enum Command {
     History,
     Close,
     ExportPdf,
+    ExportHtml,
+    ExportMarkdownPdf,
+    ExportEpub,
+    MakePresentation,
     NewProject,
     OpenFolder,
     NewFile,
@@ -139,6 +143,34 @@ impl App {
             ),
             ("Cerrar documento", "Mod+W", true, Command::Close),
             ("Exportar PDF…", "", has_pdf, Command::ExportPdf),
+            (
+                "Exportar Markdown como HTML…",
+                "",
+                self.can_export_markdown(),
+                Command::ExportHtml,
+            ),
+            (
+                "Exportar Markdown como PDF…",
+                "",
+                self.can_export_markdown(),
+                Command::ExportMarkdownPdf,
+            ),
+            (
+                if crate::export::pandoc().is_some() {
+                    "Exportar Markdown como EPUB…"
+                } else {
+                    "Exportar Markdown como EPUB… (requiere Pandoc)"
+                },
+                "",
+                self.can_export_epub(),
+                Command::ExportEpub,
+            ),
+            (
+                "Crear presentación a partir de este documento",
+                "",
+                self.can_make_presentation(),
+                Command::MakePresentation,
+            ),
             ("Nuevo proyecto…", "Mod+Shift+N", true, Command::NewProject),
             ("Abrir carpeta de proyecto…", "", true, Command::OpenFolder),
             ("Crear archivo en el proyecto…", "", true, Command::NewFile),
@@ -408,6 +440,10 @@ impl App {
             Command::History => self.show_history(),
             Command::Close => self.request_close(Pending::Close(self.active), ctx),
             Command::ExportPdf => self.export_pdf(),
+            Command::ExportHtml => self.export_html(ctx),
+            Command::ExportMarkdownPdf => self.export_markdown_pdf(ctx),
+            Command::ExportEpub => self.export_epub(ctx),
+            Command::MakePresentation => self.create_presentation(),
             Command::NewProject => self.new_project(),
             Command::OpenFolder => self.folder_dialog(),
             Command::NewFile => self.new_file(),

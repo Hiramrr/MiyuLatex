@@ -295,7 +295,9 @@ impl App {
                 Settings => "MiyuLaTeX",
                 Help => "Ayuda",
                 NewDocument | Open | OpenQuick | Save | SaveAs | SaveAll | History | Close
-                | ExportPdf => "Archivo",
+                | ExportPdf | ExportHtml | ExportMarkdownPdf | ExportEpub | MakePresentation => {
+                    "Archivo"
+                }
                 NewProject | OpenFolder | NewFile | AddFiles | ImportZip | ExportZip => "Proyecto",
                 Undo | Redo | Find | GotoLine | SearchProject | Comment | Format | Definition
                 | RenameLabel | NextProblem | PreviousProblem => "Editar",

@@ -35,6 +35,7 @@ mod developer;
 mod dialogs;
 mod documents;
 mod editor_panel;
+mod export;
 mod git_panel;
 #[cfg(target_os = "macos")]
 mod native_menu;

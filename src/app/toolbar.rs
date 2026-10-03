@@ -67,6 +67,25 @@ impl App {
                         self.export_pdf();
                         ui.close();
                     }
+                    ui.menu_button("Exportar", |ui| {
+                        if action(ui, "Markdown a HTML…", self.can_export_markdown(), "Guarda el documento Markdown activo como una página HTML autónoma. Las imágenes relativas se incrustan si la guardas fuera de su carpeta.").clicked() {
+                            self.export_html(&ctx);
+                            ui.close();
+                        }
+                        if action(ui, "Markdown a PDF…", self.can_export_markdown(), "Convierte el documento Markdown activo a LaTeX y lo compila con el motor instalado, sin cambiar el documento.").clicked() {
+                            self.export_markdown_pdf(&ctx);
+                            ui.close();
+                        }
+                        if action(ui, "Markdown a EPUB…", self.can_export_epub(), export::EPUB_HELP).clicked() {
+                            self.export_epub(&ctx);
+                            ui.close();
+                        }
+                        ui.separator();
+                        if action(ui, "Crear presentación a partir de este documento", self.can_make_presentation(), "Crea junto a este documento LaTeX guardado un .tex Beamer con una diapositiva por sección, sin tocar el original.").clicked() {
+                            self.create_presentation();
+                            ui.close();
+                        }
+                    });
                     ui.separator();
                     if action(ui, "Salir", true, "Cierra la aplicación y pregunta si hay cambios sin guardar. Cmd/Ctrl+Q.").clicked() {
                         self.request_close(Pending::Quit, &ctx);

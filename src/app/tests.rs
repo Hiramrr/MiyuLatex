@@ -1592,3 +1592,51 @@ fn git_view_stages_commits_and_guards_unsaved_documents() {
     tick(&mut app, &ctx, vec![]);
     fs::remove_dir_all(folder).unwrap();
 }
+
+#[test]
+fn export_commands_follow_the_active_document() {
+    let folder = std::env::temp_dir().join(format!("miyu-export-ui-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let tex = folder.join("articulo.tex");
+    let article = "\\documentclass{article}\n\\title{Uno}\n\\begin{document}\n\\section{Intro}\nTexto.\n\\end{document}\n";
+    fs::write(&tex, article).unwrap();
+    let markdown = folder.join("nota.md");
+    fs::write(&markdown, "# Nota\n").unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(tex.clone()), &ctx).unwrap();
+    app.config.mascot = false;
+    let enabled = |app: &App, label: &str| {
+        app.commands()
+            .into_iter()
+            .find(|c| c.0.starts_with(label))
+            .unwrap()
+            .2
+    };
+    assert!(enabled(&app, "Crear presentación"));
+    assert!(!enabled(&app, "Exportar Markdown como HTML"));
+    assert!(!enabled(&app, "Exportar Markdown como PDF"));
+    assert!(!enabled(&app, "Exportar Markdown como EPUB"));
+    // Con cambios sin guardar se usa el texto del editor, y el original no cambia.
+    let end = app.editor().end();
+    app.editor_mut().replace(
+        Pos::new(0, 0),
+        end,
+        &article.replace("Intro", "Editada"),
+    );
+    app.create_presentation();
+    let created = folder.join("articulo-presentacion.tex");
+    let text = fs::read_to_string(&created).unwrap();
+    assert!(text.contains("{Editada}") && text.contains("{beamer}"));
+    assert_eq!(fs::read_to_string(&tex).unwrap(), article);
+    assert_eq!(app.editor().path.as_deref(), created.canonicalize().ok().as_deref());
+    assert!(app.message.starts_with("Presentación creada"));
+    app.open(&markdown).unwrap();
+    assert!(enabled(&app, "Exportar Markdown como HTML"));
+    assert!(enabled(&app, "Exportar Markdown como PDF"));
+    assert_eq!(
+        enabled(&app, "Exportar Markdown como EPUB"),
+        crate::export::pandoc().is_some()
+    );
+    assert!(!enabled(&app, "Crear presentación"));
+    fs::remove_dir_all(folder).unwrap();
+}

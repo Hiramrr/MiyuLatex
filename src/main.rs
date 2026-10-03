@@ -7,6 +7,7 @@ mod custom;
 mod diff;
 mod editor;
 mod equation;
+mod export;
 mod format;
 mod formatter;
 mod git;
