@@ -59,6 +59,10 @@ tiene un fondo sólido y agrupa las acciones de documentos. El menú Proyecto
 reúne la creación, apertura e intercambio de proyectos. La barra se ajusta al
 ancho de la ventana. Los problemas de compilación abren el archivo en su línea.
 
+La paleta de comandos (`Cmd+Shift+P`) reúne las acciones de los menús. Busca
+por cualquier parte del nombre, con o sin tildes, y muestra el atajo de cada
+una. Las acciones que no están disponibles quedan al final, desactivadas.
+
 Nuevo proyecto, en el menú Proyecto, crea una carpeta
 con el nombre y la ubicación que elijas. Puedes dejarla vacía, usar una
 plantilla LaTeX o crear un archivo de código vacío para Python, Rust,
@@ -128,6 +132,9 @@ Abre y guarda otros lenguajes con su extensión.
 | `Cmd+F` / `Cmd+G` | Buscar y reemplazar / ir a línea |
 | `Cmd+Shift+F` | Buscar en el proyecto |
 | `Cmd+Shift+O` | Abrir rápido un archivo del proyecto |
+| `Cmd+Shift+P` | Paleta de comandos |
+| `F8` / `Shift+F8` | Problema siguiente / anterior de la compilación |
+| `F12` / `Cmd`+clic | Ir a la etiqueta, la cita o el archivo señalado |
 | `Cmd+Shift+J` | Mostrar en el PDF la línea del cursor |
 | `Cmd+T` | Insertar un símbolo LaTeX |
 | `Cmd+B` / `Cmd+I` / `Cmd+/` | Negrita, cursiva o comentar líneas |
@@ -174,6 +181,16 @@ Detener compilación sigue disponible al cambiar de pestaña. Configurar proyect
 LaTeX abre una ventana dedicada al archivo principal y al motor de esa carpeta.
 Preferencias conserva los ajustes generales del editor y la apariencia. Contar palabras usa `texcount`
 si está instalado y, si no, una estimación propia.
+
+Tras compilar, las líneas con problemas llevan un punto en el margen y un
+subrayado ondulado, rojo para los errores y ámbar para los avisos. El mensaje
+aparece al pasar el cursor por el margen. `F8` y `Mayús+F8` recorren los
+problemas. Las marcas son las de la última compilación: si editas líneas por
+encima, se desplazan hasta que vuelvas a compilar.
+
+`F12` o `Cmd`+clic sobre `\ref`, `\eqref` o `\cref` lleva a su `\label`; sobre
+`\cite` y sus variantes, a la entrada de la bibliografía; y sobre `\input`,
+`\include`, `\addbibresource` o `\includegraphics`, abre el archivo.
 
 Mostrar esta línea en el PDF (`Cmd+Shift+J`) lleva del código a la página y
 resalta la línea. Un doble clic o `Cmd`+clic en el PDF abre el archivo y la

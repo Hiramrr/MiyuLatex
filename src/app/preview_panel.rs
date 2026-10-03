@@ -251,16 +251,7 @@ impl App {
                                     )
                                     .clicked()
                                 {
-                                    let path = if problem.file.is_absolute() {
-                                        problem.file.clone()
-                                    } else {
-                                        result
-                                            .root
-                                            .parent()
-                                            .unwrap_or(&self.project)
-                                            .join(&problem.file)
-                                    };
-                                    jump = Some((path, problem.line));
+                                    jump = Some((Self::problem_path(result, problem), problem.line));
                                 }
                             }
                         }

@@ -51,7 +51,9 @@ impl App {
         if Self::shortcut(ctx, cmd, Key::G) {
             self.start_goto();
         }
-        if Self::shortcut(ctx, cmd, Key::P) || Self::shortcut(ctx, cmd, Key::Comma) {
+        if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::P) {
+            self.open_palette();
+        } else if Self::shortcut(ctx, cmd, Key::P) || Self::shortcut(ctx, cmd, Key::Comma) {
             self.settings = true;
         }
         if Self::shortcut(ctx, cmd, Key::T) && self.editor().format == Format::Latex {
@@ -76,6 +78,14 @@ impl App {
         }
         if Self::shortcut(ctx, Modifiers::NONE, Key::F6) {
             self.open_pdf();
+        }
+        if Self::shortcut(ctx, Modifiers::SHIFT, Key::F8) {
+            self.next_problem(true);
+        } else if Self::shortcut(ctx, Modifiers::NONE, Key::F8) {
+            self.next_problem(false);
+        }
+        if Self::shortcut(ctx, Modifiers::NONE, Key::F12) {
+            self.goto_definition(self.editor().cursor);
         }
     }
     pub(super) fn editor_keys(&mut self, ctx: &egui::Context) {

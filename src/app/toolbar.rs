@@ -121,7 +121,19 @@ impl App {
                         self.search_project();
                         ui.close();
                     }
+                    if action(ui, "Ir a la definición", latex, "Lleva a la etiqueta, la entrada de bibliografía o el archivo del comando bajo el cursor. F12 o Cmd/Ctrl+clic. Disponible en LaTeX.").clicked() {
+                        self.goto_definition(self.editor().cursor);
+                        ui.close();
+                    }
+                    if action(ui, "Problema siguiente", !self.diagnostics.is_empty(), "Lleva el cursor al siguiente problema de la última compilación. F8; con Mayús, al anterior.").clicked() {
+                        self.next_problem(false);
+                        ui.close();
+                    }
                     ui.separator();
+                    if action(ui, "Paleta de comandos…", true, "Busca cualquier acción por su nombre. Cmd/Ctrl+Mayús+P.").clicked() {
+                        self.open_palette();
+                        ui.close();
+                    }
                     if action(ui, "Comentar o descomentar líneas", editable && self.editor().format.comment().is_some(), "Alterna los comentarios de las líneas seleccionadas según el lenguaje. Cmd/Ctrl+/. Requiere un lenguaje con comentarios.").clicked() {
                         self.editor_mut().rewrite_lines(true, false);
                         self.changed_editor();

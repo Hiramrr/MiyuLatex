@@ -186,6 +186,19 @@ impl App {
                         }
                     }
                     self.panel = !result.ok || !result.problems.is_empty();
+                    self.diagnostics = result
+                        .problems
+                        .iter()
+                        .filter_map(|problem| {
+                            let path = Self::problem_path(&result, problem);
+                            Some(Diagnostic {
+                                path: path.canonicalize().unwrap_or(path),
+                                row: problem.line?.saturating_sub(1),
+                                error: problem.severity == "error",
+                                message: problem.message.clone(),
+                            })
+                        })
+                        .collect();
                     self.result = Some(result);
                 }
                 Err(e) => self.message = e,
@@ -216,6 +229,55 @@ impl App {
                 .any(|d| d.pdf.as_ref().is_some_and(|p| p.loading))
         {
             ctx.request_repaint_after(Duration::from_millis(100));
+        }
+    }
+    /// Archivo de un problema; el motor lo da relativo al documento principal.
+    pub(super) fn problem_path(result: &CompileResult, problem: &compiler::Problem) -> PathBuf {
+        match result.root.parent() {
+            Some(base) if problem.file.is_relative() => base.join(&problem.file),
+            _ => problem.file.clone(),
+        }
+    }
+    /// Lleva el cursor al problema siguiente o anterior de la última
+    /// compilación, primero dentro del archivo activo.
+    pub(super) fn next_problem(&mut self, backwards: bool) {
+        let here = self.editor().path.clone();
+        let row = self.editor().cursor.row;
+        let mut local: Vec<usize> = self
+            .diagnostics
+            .iter()
+            .filter(|d| Some(&d.path) == here.as_ref())
+            .map(|d| d.row)
+            .collect();
+        local.sort_unstable();
+        local.dedup();
+        let target = if backwards {
+            local.iter().rev().find(|r| **r < row).or(local.last())
+        } else {
+            local.iter().find(|r| **r > row).or(local.first())
+        };
+        let (path, row) = match (target, self.diagnostics.first()) {
+            (Some(row), _) => (here.unwrap(), *row),
+            (None, Some(first)) => (first.path.clone(), first.row),
+            (None, None) => {
+                self.message = "La última compilación no dejó problemas con línea".into();
+                return;
+            }
+        };
+        match self.open(&path) {
+            Ok(()) => {
+                self.editor_mut().goto(row, 0);
+                self.sync_cursor = true;
+                self.focus_editor = true;
+                self.message = self
+                    .diagnostics
+                    .iter()
+                    .filter(|d| d.path == path && d.row == row)
+                    .map(|d| d.message.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" · ");
+            }
+            Err(e) => self.message = e,
         }
     }
     pub(super) fn load_pdf(&mut self, path: &Path) {

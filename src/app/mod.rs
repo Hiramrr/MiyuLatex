@@ -64,6 +64,13 @@ enum Pending {
     Quit,
     Close(usize),
 }
+/// Problema de la última compilación situado en una línea de un archivo.
+struct Diagnostic {
+    path: PathBuf,
+    row: usize,
+    error: bool,
+    message: String,
+}
 enum ToolResult {
     Message(String),
     Imported(PathBuf),
@@ -94,6 +101,7 @@ pub struct App {
     search: dialogs::ProjectSearch,
     history: Option<dialogs::History>,
     table: dialogs::Table,
+    palette: dialogs::Palette,
     word_count: Option<String>,
     theme: Theme,
     backdrop: Backdrop,
@@ -109,6 +117,8 @@ pub struct App {
     cancel: Arc<AtomicBool>,
     compile_thread: Option<thread::JoinHandle<()>>,
     result: Option<CompileResult>,
+    /// Problemas de `result` con línea, para marcarlos en el editor.
+    diagnostics: Vec<Diagnostic>,
     panel: bool,
     log: bool,
     settings: bool,
@@ -200,6 +210,7 @@ impl App {
             search: dialogs::ProjectSearch::default(),
             history: None,
             table: dialogs::Table::default(),
+            palette: dialogs::Palette::default(),
             word_count: None,
             theme: theme::builtin().remove(0),
             backdrop,
@@ -213,6 +224,7 @@ impl App {
             cancel: Arc::new(AtomicBool::new(false)),
             compile_thread: None,
             result: None,
+            diagnostics: Vec::new(),
             panel: false,
             log: false,
             settings: false,

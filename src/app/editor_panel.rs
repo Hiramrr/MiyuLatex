@@ -245,6 +245,13 @@ impl App {
                 let mut changed_document = false;
                 let spelling = self.spell.begin(&ctx, &doc.editor, doc.id, &self.config);
                 let mut corrected = false;
+                // Problemas de la última compilación en este archivo.
+                let problems: Vec<&Diagnostic> = self
+                    .diagnostics
+                    .iter()
+                    .filter(|d| Some(&d.path) == doc.editor.path.as_ref())
+                    .collect();
+                let mut definition = None;
                 ScrollArea::both()
                     .id_salt(doc.id.with("scroll"))
                     .auto_shrink([false, false])
@@ -376,6 +383,43 @@ impl App {
                                             &mut misspelled,
                                         );
                                     }
+                                    let here = || problems.iter().filter(|d| d.row == line - 1);
+                                    if here().next().is_some() {
+                                        let color = col(if here().any(|d| d.error) {
+                                            theme.error
+                                        } else {
+                                            theme.warning
+                                        });
+                                        // Se subraya el texto, no su sangría.
+                                        if let Some(glyph) =
+                                            row.glyphs.iter().find(|g| !g.chr.is_whitespace())
+                                        {
+                                            misspelled.push(marks::squiggle(
+                                                row_rect.left() + glyph.pos.x,
+                                                row_rect.right(),
+                                                row_rect.bottom(),
+                                                color,
+                                            ));
+                                        }
+                                        if starts_line {
+                                            let margin = egui::Rect::from_x_y_ranges(
+                                                origin.x..=origin.x + gutter,
+                                                row_rect.y_range(),
+                                            );
+                                            misspelled.push(egui::Shape::circle_filled(
+                                                egui::pos2(origin.x + 5.0, margin.center().y),
+                                                3.0,
+                                                color,
+                                            ));
+                                            let id = doc.id.with(("problem", line));
+                                            ui.interact(margin, id, egui::Sense::hover())
+                                                .on_hover_text(
+                                                    here().map(|d| d.message.as_str())
+                                                        .collect::<Vec<_>>()
+                                                        .join("\n"),
+                                                );
+                                        }
+                                    }
                                     // La foto queda detrás de una sombra del color del fondo.
                                     let left = if starts_line && numbers {
                                         origin.x
@@ -427,6 +471,15 @@ impl App {
                             shadows.append(&mut under);
                             ui.painter().set(under_text, egui::Shape::Vec(shadows));
                             ui.painter().extend(misspelled);
+                            // Cmd o Ctrl y clic llevan a la definición de lo señalado.
+                            if output.response.clicked()
+                                && ui.input(|i| i.modifiers.command)
+                                && let Some(pointer) = output.response.interact_pointer_pos()
+                            {
+                                let cursor =
+                                    output.galley.cursor_from_pos(pointer - output.galley_pos);
+                                definition = Some(doc.editor.position(cursor.index.0));
+                            }
                             if spelling
                                 && output.response.secondary_clicked()
                                 && let Some(pointer) = output.response.interact_pointer_pos()
@@ -445,6 +498,9 @@ impl App {
                 self.documents[self.active].layout = text_layout;
                 if corrected {
                     self.changed_editor();
+                }
+                if let Some(pos) = definition {
+                    self.goto_definition(pos);
                 }
                 if changed_document && completions {
                     self.update_completion();

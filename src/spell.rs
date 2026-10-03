@@ -623,17 +623,7 @@ impl Speller {
             }
             let (first, last) = (&glyphs[from - column], &glyphs[to - 1 - column]);
             let (x0, x1) = (left + first.pos.x, left + last.pos.x + last.advance_width);
-            let y = bottom - 1.5;
-            let steps = ((x1 - x0) / 2.5).ceil().max(1.0) as usize;
-            let points = (0..=steps)
-                .map(|i| {
-                    egui::pos2(
-                        (x0 + i as f32 * 2.5).min(x1),
-                        y + if i % 2 == 0 { 1.0 } else { -1.0 },
-                    )
-                })
-                .collect();
-            shapes.push(egui::Shape::line(points, egui::Stroke::new(1.0, color)));
+            shapes.push(crate::marks::squiggle(x0, x1, bottom, color));
         }
     }
     /// Prepara el menú de la palabra mal escrita bajo el carácter `index`, si la hay.

@@ -111,6 +111,66 @@ impl App {
         };
         self.editor_mut().update_completion_from(&sources);
     }
+    /// Lleva a la etiqueta, la entrada de bibliografía o el archivo que nombra
+    /// el comando LaTeX bajo `pos`.
+    pub(super) fn goto_definition(&mut self, pos: crate::editor::Pos) {
+        let found = (self.editor().format == Format::Latex)
+            .then(|| self.editor().lines.get(pos.row))
+            .flatten()
+            .and_then(|line| latex::reference_at(line, pos.col));
+        let Some(reference) = found else {
+            self.message = "Aquí no hay una referencia, una cita ni un archivo de LaTeX".into();
+            return;
+        };
+        let current = self.editor().path.clone().unwrap_or_default();
+        let mut sources = self.completion_sources();
+        if !sources.iter().any(|s| s.path == current) {
+            // Un documento sin guardar todavía no forma parte del proyecto.
+            sources.push(Source {
+                path: current.clone(),
+                text: self.editor().text(),
+            });
+        }
+        let target = match &reference {
+            latex::Reference::Label(key) => latex::labels(&sources)
+                .into_iter()
+                .find(|t| t.label == *key)
+                .ok_or(format!("No encontré \\label{{{key}}} en el proyecto")),
+            latex::Reference::Citation(key) => latex::citations(&sources)
+                .into_iter()
+                .find(|t| t.label == *key)
+                .ok_or(format!("No encontré la entrada «{key}» en la bibliografía")),
+            latex::Reference::File(name, extensions) => {
+                let root = self.root().unwrap_or_else(|| current.clone());
+                extensions
+                    .iter()
+                    .find_map(|extension| latex::resolve_file(&root, &current, name, extension))
+                    .map(|path| Target {
+                        path,
+                        row: 0,
+                        col: 0,
+                        label: String::new(),
+                        detail: String::new(),
+                    })
+                    .ok_or(format!("No encontré el archivo «{name}»"))
+            }
+        };
+        match target {
+            Ok(target) if target.path == current => {
+                self.editor_mut().goto(target.row, target.col);
+                self.sync_cursor = true;
+                self.focus_editor = true;
+            }
+            // Un archivo abre en su pestaña sin mover el cursor que ya tuviera.
+            Ok(target) if matches!(reference, latex::Reference::File(..)) => {
+                if let Err(e) = self.open(&target.path) {
+                    self.message = e;
+                }
+            }
+            Ok(target) => self.jump(&target),
+            Err(e) => self.message = e,
+        }
+    }
     pub(super) fn project_changed(&mut self) {
         if let Err(e) = self.project_settings.save(&self.project) {
             self.message = e.to_string();

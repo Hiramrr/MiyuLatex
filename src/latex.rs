@@ -281,6 +281,52 @@ fn source_citations(source: &Source) -> Rc<[Target]> {
     targets.into()
 }
 
+/// Lo que nombra un comando LaTeX y a dónde lleva.
+#[derive(Debug, PartialEq)]
+pub enum Reference {
+    Label(String),
+    Citation(String),
+    /// Nombre del archivo y extensiones con que probar si no trae una.
+    File(String, &'static [&'static str]),
+}
+
+/// Referencia, cita o archivo del comando que rodea la columna `col` de `line`.
+pub fn reference_at(line: &str, col: usize) -> Option<Reference> {
+    let at = crate::editor::byte_col(line, col);
+    regex(r"\\([A-Za-z]+)\*?\s*(?:\[[^\]]*\]\s*)*\{([^{}]*)\}")
+        .captures_iter(line)
+        .find_map(|m| {
+            let keys = m.get(2).unwrap();
+            if !(keys.start()..=keys.end()).contains(&at) {
+                return None;
+            }
+            // Con varias claves separadas por comas, la que está bajo el cursor.
+            let mut start = keys.start();
+            let key = keys
+                .as_str()
+                .split(',')
+                .find(|key| {
+                    let end = start + key.len();
+                    let found = at <= end;
+                    start = end + 1;
+                    found
+                })?
+                .trim();
+            if key.is_empty() {
+                return None;
+            }
+            let command = m[1].to_lowercase();
+            Some(match command.as_str() {
+                "input" | "include" | "subfile" => Reference::File(key.into(), &["tex"]),
+                "bibliography" | "addbibresource" => Reference::File(key.into(), &["bib"]),
+                "includegraphics" => Reference::File(key.into(), &["pdf", "png", "jpg", "jpeg"]),
+                _ if command.contains("cite") => Reference::Citation(key.into()),
+                _ if command.ends_with("ref") => Reference::Label(key.into()),
+                _ => return None,
+            })
+        })
+}
+
 pub fn table(rows: usize, columns: usize, alignment: char) -> String {
     let columns = columns.clamp(1, 20);
     let rows = rows.clamp(1, 100);
@@ -520,6 +566,24 @@ pub fn import_zip(archive: &Path, destination: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reference_under_the_cursor() {
+        let line = "Ver \\eqref{eq:uno} y \\cite[p.~3]{knuth, lamport} en \\input{cap/dos}.";
+        let at = |text: &str| reference_at(line, line.find(text).unwrap() + 1);
+        assert_eq!(at("eq:uno"), Some(Reference::Label("eq:uno".into())));
+        assert_eq!(at("knuth"), Some(Reference::Citation("knuth".into())));
+        assert_eq!(at("lamport"), Some(Reference::Citation("lamport".into())));
+        assert_eq!(at("cap/dos"), Some(Reference::File("cap/dos".into(), &["tex"])));
+        assert_eq!(at("Ver"), None);
+        assert_eq!(at("p.~3"), None);
+        // Las columnas cuentan caracteres, no bytes.
+        assert_eq!(
+            reference_at("ñandú \\ref{sec:año}", 14),
+            Some(Reference::Label("sec:año".into()))
+        );
+        assert_eq!(reference_at("\\section{Título}", 10), None);
+    }
 
     #[test]
     fn project_sources_citations_history_and_safe_zip() {

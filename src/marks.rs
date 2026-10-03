@@ -159,6 +159,21 @@ impl Marks {
     }
 }
 
+/// Subrayado ondulado entre `x0` y `x1`, sobre el borde inferior de una fila.
+pub fn squiggle(x0: f32, x1: f32, bottom: f32, color: Color32) -> Shape {
+    let y = bottom - 1.5;
+    let steps = ((x1 - x0) / 2.5).ceil().max(1.0) as usize;
+    let points = (0..=steps)
+        .map(|i| {
+            egui::pos2(
+                (x0 + i as f32 * 2.5).min(x1),
+                y + if i % 2 == 0 { 1.0 } else { -1.0 },
+            )
+        })
+        .collect();
+    Shape::line(points, Stroke::new(1.0, color))
+}
+
 /// Posición entre las coincidencias de la que está seleccionada, desde 1.
 pub fn current_match(editor: &Editor) -> Option<usize> {
     let selection = editor.selection();

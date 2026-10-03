@@ -735,3 +735,89 @@ fn history_window_opens_only_for_saved_latex() {
     assert!(!app.message.is_empty());
     fs::remove_dir_all(folder).unwrap();
 }
+
+#[test]
+fn definition_problems_and_command_palette() {
+    let folder = std::env::temp_dir().join(format!("miyu-navegar-{}", std::process::id()));
+    fs::create_dir_all(folder.join("cap")).unwrap();
+    let folder = folder.canonicalize().unwrap();
+    let main = folder.join("main.tex");
+    let chapter = folder.join("cap/uno.tex");
+    let bib = folder.join("refs.bib");
+    fs::write(
+        &main,
+        "\\documentclass{article}\n\\addbibresource{refs.bib}\n\\begin{document}\n\\input{cap/uno}\nVer \\ref{sec:uno} y \\cite{knuth}.\n\\ref{nada}\n\\end{document}\n",
+    )
+    .unwrap();
+    fs::write(&chapter, "Texto\n  \\section{Uno}\\label{sec:uno}\n").unwrap();
+    fs::write(&bib, "@book{otro,\n title = {A}\n}\n@book{knuth,\n title = {B}\n}\n").unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(main.clone()), &ctx).unwrap();
+    app.backdrop = Backdrop::default();
+    tick(&mut app, &ctx, vec![]);
+
+    // De la referencia a su etiqueta en otro archivo.
+    app.goto_definition(Pos::new(4, 10));
+    assert_eq!(app.editor().path.as_ref(), Some(&chapter));
+    assert_eq!(app.editor().cursor, Pos::new(1, 15));
+    // De la cita a su entrada de bibliografía.
+    app.open(&main).unwrap();
+    app.goto_definition(Pos::new(4, 27));
+    assert_eq!(app.editor().path.as_ref(), Some(&bib));
+    assert_eq!(app.editor().cursor.row, 3);
+    // De \input al archivo; F12 usa la posición del cursor.
+    app.open(&main).unwrap();
+    app.editor_mut().goto(3, 9);
+    tick(&mut app, &ctx, vec![]);
+    tick(&mut app, &ctx, vec![key(Key::F12, Modifiers::NONE)]);
+    assert_eq!(app.editor().path.as_ref(), Some(&chapter));
+    // Una etiqueta que no existe deja un aviso y no cambia de archivo.
+    app.open(&main).unwrap();
+    app.goto_definition(Pos::new(5, 6));
+    assert_eq!(app.editor().path.as_ref(), Some(&main));
+    assert!(app.message.contains("nada"));
+
+    // Los problemas con línea se pintan en el editor y se recorren con F8.
+    for (path, row, error) in [(&main, 4, false), (&main, 1, true), (&chapter, 0, true)] {
+        app.diagnostics.push(Diagnostic {
+            path: path.clone(),
+            row,
+            error,
+            message: format!("problema {row}"),
+        });
+    }
+    app.editor_mut().goto(0, 0);
+    tick(&mut app, &ctx, vec![]);
+    tick(&mut app, &ctx, vec![key(Key::F8, Modifiers::NONE)]);
+    assert_eq!(app.editor().cursor.row, 1);
+    assert_eq!(app.message, "problema 1");
+    tick(&mut app, &ctx, vec![key(Key::F8, Modifiers::NONE)]);
+    assert_eq!(app.editor().cursor.row, 4);
+    tick(&mut app, &ctx, vec![key(Key::F8, Modifiers::NONE)]);
+    assert_eq!(app.editor().cursor.row, 1);
+    tick(&mut app, &ctx, vec![key(Key::F8, Modifiers::SHIFT)]);
+    assert_eq!(app.editor().cursor.row, 4);
+
+    // La paleta encuentra acciones sin tildes y las ejecuta con Enter.
+    tick(
+        &mut app,
+        &ctx,
+        vec![key(Key::P, Modifiers::COMMAND | Modifiers::SHIFT)],
+    );
+    assert!(app.palette.open);
+    assert!(!app.settings);
+    tick(&mut app, &ctx, vec![]);
+    tick(&mut app, &ctx, vec![egui::Event::Text("simbolo".into())]);
+    assert_eq!(app.palette.query, "simbolo");
+    assert_eq!(app.palette_matches()[0].0, "Insertar símbolo LaTeX…");
+    tick(&mut app, &ctx, vec![key(Key::Enter, Modifiers::NONE)]);
+    assert!(!app.palette.open);
+    assert!(app.symbols);
+    // Una acción no disponible queda al final y no se ejecuta.
+    app.symbols = false;
+    app.open_palette();
+    app.palette.query = "detener".into();
+    let found = app.palette_matches();
+    assert_eq!((found[0].0, found[0].2), ("Detener compilación", false));
+    fs::remove_dir_all(folder).unwrap();
+}

@@ -3,10 +3,12 @@
 use super::*;
 
 mod insert;
+mod palette;
 mod project;
 mod settings;
 
 pub(super) use insert::Table;
+pub(super) use palette::Palette;
 pub(super) use project::{History, ProjectSearch};
 
 impl App {
@@ -21,6 +23,7 @@ impl App {
         self.symbols_dialog(ctx);
         self.goto_dialog(ctx);
         self.help_dialog(ctx);
+        self.palette_dialog(ctx);
         self.close_dialog(ctx);
     }
     pub(super) fn word_count_dialog(&mut self, ctx: &egui::Context) {
@@ -63,6 +66,7 @@ impl App {
                         ("R", "Compilar"),
                         ("F", "Buscar y reemplazar"),
                         ("G", "Ir a línea"),
+                        ("Shift+P", "Paleta de comandos"),
                         ("Shift+O", "Abrir rápido un archivo del proyecto"),
                         ("Shift+F", "Buscar en el proyecto"),
                         ("Shift+J", "Mostrar la línea en el PDF"),
@@ -88,6 +92,8 @@ impl App {
                     ui.label("Alt+↑ y Alt+↓ mueven la línea. Tab y Mayús+Tab cambian la sangría.");
                     ui.label("Copiar o cortar sin selección toman la línea entera.");
                     ui.label("F5 compila. Tab acepta una sugerencia.");
+                    ui.label("F8 y Mayús+F8 recorren los problemas de la compilación.");
+                    ui.label(format!("F12 o {modifier}+clic llevan a la etiqueta, la cita o el archivo señalado."));
                     ui.label("F2, F3 y F4 muestran u ocultan paneles.");
                     ui.label("Markdown tiene vista previa y esquema de títulos.");
                     ui.label("PDF e imágenes se abren en pestañas de solo lectura.");
