@@ -65,6 +65,11 @@ pub struct Config {
     pub spellcheck: bool,
     /// Idioma del diccionario, como lo nombra el sistema: `es`, `en`, `es_MX`.
     pub spell_language: String,
+    /// Posición y tamaño de la ventana al salir, en puntos. Ancho 0: sin recordar.
+    pub window_x: f64,
+    pub window_y: f64,
+    pub window_width: f64,
+    pub window_height: f64,
     #[serde(flatten)]
     extra: BTreeMap<String, Value>,
 }
@@ -118,6 +123,10 @@ impl Default for Config {
             recent_projects: Vec::new(),
             spellcheck: true,
             spell_language: "es".into(),
+            window_x: 0.0,
+            window_y: 0.0,
+            window_width: 0.0,
+            window_height: 0.0,
             extra: BTreeMap::new(),
         }
     }

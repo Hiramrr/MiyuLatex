@@ -132,6 +132,8 @@ pub struct App {
     /// Puntos por celda y tamaño de ventana con que se generó la textura.
     background_layout: (f32, egui::Vec2),
     background_job: Option<Receiver<BackgroundFrame>>,
+    /// Posición y tamaño de la ventana en el último cuadro, para recordarlos al salir.
+    window: Option<egui::Rect>,
     preview: Preview,
     markdown_cache: CommonMarkCache,
     markdown_view: crate::mdview::MarkdownView,
@@ -251,6 +253,7 @@ impl App {
             background_key: String::new(),
             background_layout: (1.0, egui::Vec2::ZERO),
             background_job: None,
+            window: None,
             markdown_cache: CommonMarkCache::default(),
             markdown_view: Default::default(),
             compile_rx: None,
@@ -307,6 +310,16 @@ impl App {
     }
     pub fn draw(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        // En pantalla completa o minimizada se conserva el tamaño anterior.
+        ctx.input(|i| {
+            let viewport = i.viewport();
+            if viewport.fullscreen != Some(true)
+                && viewport.minimized != Some(true)
+                && let (Some(outer), Some(inner)) = (viewport.outer_rect, viewport.inner_rect)
+            {
+                self.window = Some(egui::Rect::from_min_size(outer.min, inner.size()));
+            }
+        });
         self.paint_background(ui, ui.max_rect());
         self.poll(&ctx);
         self.watch_disk(&ctx);
@@ -472,6 +485,12 @@ impl App {
     fn shutdown(&mut self) {
         self.developer.terminals.clear();
         self.remember_session();
+        if let Some(window) = self.window {
+            self.config.window_x = window.min.x.into();
+            self.config.window_y = window.min.y.into();
+            self.config.window_width = window.width().into();
+            self.config.window_height = window.height().into();
+        }
         let _ = self.config.save();
         self.cancel.store(true, Ordering::Relaxed);
         if let Some(worker) = self.compile_thread.take() {
@@ -516,6 +535,25 @@ pub fn run(target: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
         .with_inner_size([1280.0, 820.0])
         .with_min_inner_size([480.0, 320.0])
         .with_icon(icon);
+    // La ventana vuelve a donde quedó la última vez.
+    let config = Config::load();
+    let remembered = [
+        config.window_x,
+        config.window_y,
+        config.window_width,
+        config.window_height,
+    ]
+    .map(|v| v as f32);
+    let viewport = if remembered.iter().all(|v| v.is_finite())
+        && remembered[2] >= 480.0
+        && remembered[3] >= 320.0
+    {
+        viewport
+            .with_position([remembered[0], remembered[1]])
+            .with_inner_size([remembered[2], remembered[3]])
+    } else {
+        viewport
+    };
     #[cfg(target_os = "macos")]
     let viewport = viewport
         .with_fullsize_content_view(true)
