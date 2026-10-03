@@ -87,15 +87,19 @@ mod system {
 
 #[cfg(not(target_os = "macos"))]
 mod system {
-    pub fn check(_: &str, _: &str) -> Vec<(usize, usize)> {
-        Vec::new()
+    use crate::hunspell::shared;
+
+    pub fn check(text: &str, language: &str) -> Vec<(usize, usize)> {
+        shared().lock().unwrap().check(text, language)
     }
-    pub fn guesses(_: &str, _: &str) -> Vec<String> {
-        Vec::new()
+    pub fn guesses(word: &str, language: &str) -> Vec<String> {
+        shared().lock().unwrap().guesses(word, language)
     }
-    pub fn learn(_: &str) {}
+    pub fn learn(word: &str) {
+        shared().lock().unwrap().learn(word);
+    }
     pub fn languages() -> Vec<String> {
-        Vec::new()
+        shared().lock().unwrap().languages()
     }
 }
 

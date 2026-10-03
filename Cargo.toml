@@ -25,6 +25,8 @@ pulldown-cmark = { version = "0.13", default-features = false }
 syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
 # Gramáticas que syntect no trae: TypeScript, Kotlin, Swift, TOML y otras.
 two-face = { version = "0.5", default-features = false, features = ["syntect-fancy"] }
+# Ortografía con diccionarios Hunspell donde no hay corrector del sistema.
+spellbook = "0.4"
 flate2 = "1"
 # El mismo portapapeles que usa egui: aquí solo para leer imágenes.
 arboard = { version = "3.6", default-features = false, features = ["image-data"] }

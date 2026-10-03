@@ -11,6 +11,7 @@ mod format;
 mod formatter;
 mod git;
 mod highlight;
+mod hunspell;
 mod icons;
 mod latex;
 mod layout;

@@ -287,12 +287,19 @@ líneas. La rama y el commit se vuelven a leer al cambiar de pestaña.
 
 ## Ortografía
 
-En macOS, el editor subraya las palabras que no están en el diccionario del
-sistema. Revisa la prosa de LaTeX, Markdown y texto. Deja fuera comandos,
-matemáticas, comentarios, claves de citas y referencias, rutas y el preámbulo.
-El clic derecho sobre una palabra subrayada ofrece sugerencias, la añade al
+El editor subraya las palabras que no están en el diccionario. Revisa la
+prosa de LaTeX, Markdown y texto. Deja fuera comandos, matemáticas,
+comentarios, claves de citas y referencias, rutas y el preámbulo. El clic
+derecho sobre una palabra subrayada ofrece sugerencias, la añade al
 diccionario o la ignora durante la sesión. El idioma se elige en Preferencias
 y por defecto es español.
+
+En macOS usa el diccionario del sistema. En Linux y otros sistemas usa
+diccionarios Hunspell: los de `/usr/share/hunspell` y `/usr/share/myspell`
+(por ejemplo, el paquete `hunspell-es`) y los que pongas en
+`~/.config/miyulatex/dictionaries`, con sus dos archivos `.aff` y `.dic`. Las
+palabras añadidas se guardan en `~/.config/miyulatex/palabras.txt`. Sin un
+diccionario del idioma elegido no se subraya nada.
 
 ## Personalización
 
@@ -377,7 +384,7 @@ miyu --render-background foto.png fondo.png 1280 800 2 1 16131f dither
 el esquema de Markdown, `latex.rs` reúne fuentes, etiquetas, citas, historial y
 ZIP del proyecto, `compiler.rs` compila y lee problemas, `bib.rs` revisa la bibliografía, `diff.rs` compara versiones, `git.rs` lee la rama y los cambios, `formatter.rs` llama a los formateadores, `synctex.rs` relaciona
 el código con el PDF, `preview.rs` rasteriza y dibuja el PDF, `pdftext.rs` lee su texto, `spell.rs` revisa
-la ortografía, `workspace.rs` lleva la sesión y los archivos, `backdrop.rs` trama la foto, `theme.rs` define
+la ortografía (con `hunspell.rs` fuera de macOS), `workspace.rs` lleva la sesión y los archivos, `backdrop.rs` trama la foto, `theme.rs` define
 los temas, `custom.rs` aplica la personalización y `config.rs` guarda
 preferencias. `snippets.json` conserva los catálogos de la versión Python.
 
