@@ -27,6 +27,8 @@ pub mod code;
 mod complete;
 #[path = "cursors.rs"]
 pub mod cursors;
+#[path = "folds.rs"]
+mod folds;
 
 #[derive(Deserialize)]
 pub struct Command {
@@ -115,6 +117,12 @@ pub struct Editor {
     pub saved: String,
     pub cursor: Pos,
     pub anchor: Option<Pos>,
+    /// Filas que encabezan un bloque plegado, en orden.
+    folds: Vec<usize>,
+    /// Tramos de filas ocultas por los pliegues, sin solaparse.
+    hidden: Vec<(usize, usize)>,
+    /// Cambia cuando cambia lo que está oculto.
+    pub fold_version: u64,
     /// Cursores adicionales y la revisión del texto para la que valen.
     extras: (u64, Vec<(Pos, Pos)>),
     /// Se calcula al pedirlo y se descarta con cada edición.
@@ -172,6 +180,9 @@ impl Editor {
             cursor: Pos::default(),
             anchor: None,
             extras: (0, Vec::new()),
+            folds: Vec::new(),
+            hidden: Vec::new(),
+            fold_version: 0,
             outline: OnceCell::new(),
             matches: Vec::new(),
             query: String::new(),
@@ -385,6 +396,7 @@ impl Editor {
             .map(str::to_string)
             .collect();
         self.syntax.edit(a.row, b.row - a.row + 1, &rows);
+        self.shift_folds(a.row, b.row - a.row + 1, rows.len(), a.col == 0);
         self.lines.splice(a.row..=b.row, rows);
         self.refresh();
     }
@@ -407,6 +419,7 @@ impl Editor {
         self.text.clear();
         self.text.push_str(text);
         self.syntax.edit(head, removed, &rows);
+        self.shift_folds(head, removed, rows.len(), false);
         self.lines.splice(head..head + removed, rows);
         self.refresh();
     }
@@ -575,6 +588,9 @@ impl Editor {
         self.revision += 1;
         self.highlight();
         self.outline.take();
+        if !self.folds.is_empty() {
+            self.update_folds();
+        }
         if self.query.is_empty() {
             self.matches.clear();
         } else {

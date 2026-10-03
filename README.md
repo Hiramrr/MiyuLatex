@@ -117,6 +117,14 @@ activa: el teclado, la búsqueda y la vista previa siguen al panel activo, y
 elegir otra pestaña cambia su documento. La pestaña del otro panel queda
 subrayada en gris. La ortografía solo se revisa en el panel activo.
 
+`F9` pliega el bloque del cursor bajo su primera línea y lo vuelve a mostrar:
+una sección de LaTeX o Markdown, un entorno `\begin…\end` o un bloque de
+código con más sangría. También sirve el triángulo que aparece en el margen
+al pasar el puntero. Una línea plegada lleva la marca `⋯`. Las flechas saltan
+lo oculto, y buscar, ir a una línea o abrir un problema despliegan lo que
+haga falta. Ver tiene Plegar todo y Desplegar todo (`Mayús+F9`). Los pliegues
+no se guardan al cerrar el documento.
+
 El editor admite varios cursores. `Cmd+D` selecciona la palabra y, al
 repetirlo, añade su siguiente aparición; `Cmd+Alt+↑` y `Cmd+Alt+↓` añaden un
 cursor en la línea de arriba o de abajo, y `Alt`+clic lo pone donde señales.
@@ -172,6 +180,7 @@ Abre y guarda otros lenguajes con su extensión.
 | `F6` | Abrir el PDF en el visor del sistema |
 | `F2` / `F3` / `F4` | Mostrar archivos, vista previa o problemas |
 | `Cmd+\` | Dividir el editor en dos paneles |
+| `F9` / `Shift+F9` | Plegar o desplegar el bloque del cursor / desplegar todo |
 | `Cmd+F` / `Cmd+G` | Buscar y reemplazar / ir a línea |
 | `Cmd+Shift+F` | Buscar en el proyecto |
 | `Cmd+Shift+O` | Abrir rápido un archivo del proyecto |
@@ -394,7 +403,8 @@ miyu --render-pdf documento.pdf pagina.png 1
 miyu --render-background foto.png fondo.png 1280 800 2 1 16131f dither
 ```
 
-`app.rs` dibuja la ventana y maneja los eventos. `editor.rs` edita texto,
+`app.rs` dibuja la ventana y maneja los eventos. `editor.rs` edita texto, con
+`cursors.rs` para los cursores múltiples y `folds.rs` para el plegado,
 `highlight.rs` resalta LaTeX, `syntax.rs` mantiene el resaltado por líneas y
 `layout.rs` maqueta solo las que cambian. `format.rs` detecta formatos y extrae
 el esquema de Markdown, `latex.rs` reúne fuentes, etiquetas, citas, historial y

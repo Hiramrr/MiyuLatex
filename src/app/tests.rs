@@ -1204,3 +1204,74 @@ fn splits_the_editor_in_two_panes() {
     assert!(app.split.is_none());
     fs::remove_dir_all(folder).unwrap();
 }
+
+#[test]
+fn folds_blocks_in_the_editor() {
+    let folder = std::env::temp_dir().join(format!("miyu-plegar-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("main.tex");
+    fs::write(
+        &path,
+        "\\section{Uno}\nTexto uno\nMás texto\n\n\\section{Dos}\nTexto dos\n\\end{document}\n",
+    )
+    .unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(path), &ctx).unwrap();
+    app.backdrop = Backdrop::default();
+    app.config.completions = false;
+    app.config.show_preview = false;
+    tick(&mut app, &ctx, vec![]);
+    tick(&mut app, &ctx, vec![]);
+    let height = |app: &App| {
+        app.documents[0]
+            .layout
+            .galley
+            .as_ref()
+            .unwrap()
+            .rect
+            .height()
+    };
+    let full = height(&app);
+    let row = full / 8.0;
+    // F9 pliega la sección del cursor: dos filas dejan de ocupar sitio.
+    tick(&mut app, &ctx, vec![key(Key::F9, Modifiers::NONE)]);
+    tick(&mut app, &ctx, vec![]);
+    assert!(app.editor().folded(0));
+    assert!(
+        (full - height(&app) - 2.0 * row).abs() < 1.0,
+        "{full} {}",
+        height(&app)
+    );
+    assert_eq!(app.editor().text().lines().count(), 7);
+    // Las flechas saltan lo plegado en los dos sentidos.
+    tick(&mut app, &ctx, vec![key(Key::ArrowDown, Modifiers::NONE)]);
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!(app.editor().cursor.row, 3);
+    tick(&mut app, &ctx, vec![key(Key::ArrowUp, Modifiers::NONE)]);
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!(app.editor().cursor, Pos::new(0, 13));
+    // Escribir en la línea plegada no la despliega.
+    tick(&mut app, &ctx, vec![egui::Event::Text("!".into())]);
+    assert!(
+        app.editor()
+            .text()
+            .starts_with("\\section{Uno}!\nTexto uno")
+    );
+    assert!(app.editor().folded(0));
+    // Ir a una línea oculta la muestra.
+    app.editor_mut().goto(2, 1);
+    app.sync_cursor = true;
+    tick(&mut app, &ctx, vec![]);
+    tick(&mut app, &ctx, vec![]);
+    assert!(!app.editor().has_folds());
+    assert_eq!(app.editor().cursor, Pos::new(2, 1));
+    assert!((full - height(&app)).abs() < 1.0);
+    // Plegar todo y desplegar todo.
+    app.fold_everything(true);
+    tick(&mut app, &ctx, vec![]);
+    assert!(app.editor().folded(0) && app.editor().folded(4));
+    assert_eq!(app.editor().cursor.row, 0);
+    tick(&mut app, &ctx, vec![key(Key::F9, Modifiers::SHIFT)]);
+    assert!(!app.editor().has_folds());
+    fs::remove_dir_all(folder).unwrap();
+}

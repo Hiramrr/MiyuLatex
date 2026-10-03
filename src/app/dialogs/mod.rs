@@ -107,6 +107,7 @@ impl App {
                     ui.label("F8 y Mayús+F8 recorren los problemas de la compilación.");
                     ui.label(format!("F12 o {modifier}+clic llevan a la etiqueta, la cita o el archivo señalado."));
                     ui.label("F2, F3 y F4 muestran u ocultan paneles.");
+                    ui.label("F9 pliega o despliega el bloque del cursor; Mayús+F9 despliega todo.");
                     ui.label("Markdown tiene vista previa y esquema de títulos.");
                     ui.label("PDF e imágenes se abren en pestañas de solo lectura.");
                     ui.label("En el PDF, Buscar resalta el texto y arrastrar lo selecciona para copiarlo.");

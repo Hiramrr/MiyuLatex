@@ -157,6 +157,18 @@ impl App {
                         self.toggle_split();
                         ui.close();
                     }
+                    if action(ui, "Plegar o desplegar el bloque del cursor", editable, "Oculta la sección, el entorno o el bloque de código del cursor bajo su primera línea, o lo vuelve a mostrar. F9. También con el triángulo del margen.").clicked() {
+                        self.toggle_fold_at_cursor();
+                        ui.close();
+                    }
+                    if action(ui, "Plegar todo", editable, "Pliega las secciones de primer nivel o los bloques de código de primer nivel.").clicked() {
+                        self.fold_everything(true);
+                        ui.close();
+                    }
+                    if action(ui, "Desplegar todo", editable && self.editor().has_folds(), "Muestra todo lo plegado. Mayús+F9.").clicked() {
+                        self.fold_everything(false);
+                        ui.close();
+                    }
                     ui.checkbox(&mut self.panel, "Problemas y registro de compilación").on_hover_text("Muestra u oculta los resultados de la última compilación. F4.");
                     changed |= ui.checkbox(&mut self.config.mascot, "Gatito en la barra de estado").on_hover_text("Muestra u oculta la mascota. Teclea en su portátil mientras escribes, espera la compilación y se duerme si no hay actividad.").changed();
                     changed |= ui.add_enabled(self.config.mascot, egui::Checkbox::new(&mut self.config.mascot_friend, "Cangrejito amigo del gatito")).on_hover_text("Un cangrejito que pasea por la barra de estado y va a saludar al gatito.").changed();

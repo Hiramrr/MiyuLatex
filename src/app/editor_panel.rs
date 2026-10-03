@@ -195,6 +195,11 @@ impl App {
         }
         let follow_cursor = primary && self.sync_cursor;
         let doc = &mut self.documents[index];
+        // Un salto a una línea plegada (buscar, ir a línea, un problema) la despliega.
+        if follow_cursor && doc.editor.is_hidden(doc.editor.cursor.row) {
+            doc.editor.unfold_at(doc.editor.cursor.row);
+        }
+        let mut toggle_fold = None;
         if follow_cursor {
             let mut state = egui::text_edit::TextEditState::load(&ctx, doc.id).unwrap_or_default();
             let range = CCursorRange::two(
@@ -353,6 +358,11 @@ impl App {
                         if add_cursor {
                             doc.editor.add_cursor(before.0, before.1);
                         }
+                        // Las flechas no entran en lo plegado: lo saltan.
+                        if doc.editor.skip_hidden(before.1) {
+                            self.sync_cursor = true;
+                            ctx.request_repaint();
+                        }
                         let cursor_rect = output.galley.pos_from_cursor(range.primary);
                         let cursor_rect = cursor_rect.translate(output.galley_pos.to_vec2());
                         cursor_position = Some(cursor_rect.left_bottom());
@@ -398,9 +408,78 @@ impl App {
                     // Columna de la línea con que empieza cada fila visual.
                     let mut column = 0;
                     let mut misspelled = Vec::new();
+                    // Los triángulos de plegado solo se ven con el puntero en el margen.
+                    let over_margin = ui.rect_contains_pointer(egui::Rect::from_x_y_ranges(
+                        origin.x..=origin.x + gutter,
+                        ui.clip_rect().y_range(),
+                    ));
                     for row in &output.galley.rows {
                         let row_rect = row.rect().translate(output.galley_pos.to_vec2());
-                        if visible.intersects(row_rect.y_range()) {
+                        let shown = !doc.editor.is_hidden(line - 1);
+                        if shown && starts_line && visible.intersects(row_rect.y_range()) {
+                            let folded = doc.editor.folded(line - 1);
+                            if folded || (over_margin && doc.editor.foldable(line - 1)) {
+                                let area = egui::Rect::from_x_y_ranges(
+                                    origin.x..=origin.x + 12.0,
+                                    row_rect.y_range(),
+                                );
+                                let (x, y) = (area.left() + 2.0, area.center().y);
+                                let points = if folded {
+                                    vec![
+                                        egui::pos2(x + 2.0, y - 4.0),
+                                        egui::pos2(x + 7.0, y),
+                                        egui::pos2(x + 2.0, y + 4.0),
+                                    ]
+                                } else {
+                                    vec![
+                                        egui::pos2(x, y - 2.5),
+                                        egui::pos2(x + 8.0, y - 2.5),
+                                        egui::pos2(x + 4.0, y + 2.5),
+                                    ]
+                                };
+                                misspelled.push(egui::Shape::convex_polygon(
+                                    points,
+                                    col(theme.muted()),
+                                    Stroke::NONE,
+                                ));
+                                let help = if folded {
+                                    "Desplegar este bloque. F9."
+                                } else {
+                                    "Plegar este bloque. F9."
+                                };
+                                let id = doc.id.with(("fold", line));
+                                if ui
+                                    .interact(area, id, egui::Sense::click())
+                                    .on_hover_text(help)
+                                    .clicked()
+                                {
+                                    toggle_fold = Some(line - 1);
+                                }
+                            }
+                            if folded {
+                                // Señal de que tras esta línea hay texto oculto.
+                                let mark = egui::Rect::from_min_size(
+                                    egui::pos2(row_rect.right() + 8.0, row_rect.center().y - 6.0),
+                                    egui::vec2(22.0, 12.0),
+                                );
+                                misspelled.push(egui::Shape::rect_filled(
+                                    mark,
+                                    3.0,
+                                    col(theme.muted()).gamma_multiply(0.35),
+                                ));
+                                for dot in 0..3 {
+                                    misspelled.push(egui::Shape::circle_filled(
+                                        egui::pos2(
+                                            mark.left() + 5.0 + 6.0 * dot as f32,
+                                            mark.center().y,
+                                        ),
+                                        1.3,
+                                        col(theme.fg),
+                                    ));
+                                }
+                            }
+                        }
+                        if shown && visible.intersects(row_rect.y_range()) {
                             marks.row(
                                 &doc.editor,
                                 line - 1,
@@ -556,6 +635,9 @@ impl App {
             });
         self.documents[index].layout = text_layout;
         self.documents[index].changes.1 = changes;
+        if let Some(row) = toggle_fold {
+            self.toggle_fold(index, row);
+        }
         if !primary {
             return wants;
         }
@@ -633,6 +715,36 @@ impl App {
             }
         }
         wants
+    }
+    /// Pliega o despliega un bloque; el cursor que quede dentro sube a su primera línea.
+    fn toggle_fold(&mut self, index: usize, row: usize) {
+        let editor = &mut self.documents[index].editor;
+        if editor.toggle_fold(row) && editor.skip_hidden(crate::editor::Pos::new(usize::MAX, 0)) {
+            self.sync_cursor = true;
+        }
+    }
+    /// Pliega el bloque del cursor o, si no encabeza ninguno, el que lo contiene.
+    pub(super) fn toggle_fold_at_cursor(&mut self) {
+        let row = self.editor().cursor.row;
+        let start = if self.editor().fold_end(row).is_some() {
+            Some(row)
+        } else {
+            self.editor().enclosing_fold(row)
+        };
+        match start {
+            Some(start) => self.toggle_fold(self.active, start),
+            None => self.message = "Aquí no hay ningún bloque que plegar".into(),
+        }
+    }
+    pub(super) fn fold_everything(&mut self, fold: bool) {
+        let editor = self.editor_mut();
+        if fold {
+            editor.fold_all();
+            editor.skip_hidden(crate::editor::Pos::new(usize::MAX, 0));
+        } else {
+            editor.unfold_all();
+        }
+        self.sync_cursor = true;
     }
     /// Los dos documentos de la vista dividida, si los dos siguen abiertos.
     fn split_panes(&mut self) -> Option<[usize; 2]> {

@@ -46,6 +46,8 @@ const BUDGET: Duration = Duration::from_millis(4);
 const NEAR: usize = 120;
 /// Marca la huella de una fila maquetada en plano, pendiente de color.
 const PLAIN: u64 = 0x9e37_79b9_7f4a_7c15;
+/// Marca la huella de una fila oculta por un pliegue.
+const HIDDEN: u64 = 0xc2b2_ae3d_27d4_eb4f;
 
 /// Aspecto con que se maqueta el texto.
 pub struct Look<'a> {
@@ -119,8 +121,8 @@ pub struct Layout {
     /// Huella del aspecto y el ajuste de línea con que se maquetó.
     look: u64,
     width: f32,
-    /// Revisión del texto y versión del resaltado ya maquetadas.
-    seen: Option<(u64, u64)>,
+    /// Revisión del texto, versión del resaltado y de los pliegues ya maquetadas.
+    seen: Option<(u64, u64, u64)>,
     /// Párrafos ya maquetados, por huella de su contenido.
     cache: HashMap<u64, Arc<Galley>, BuildHasherDefault<Identity>>,
     /// Huella y párrafo de cada fila del último maquetado.
@@ -165,7 +167,7 @@ impl Layout {
             self.rows.clear();
             self.seen = None;
         }
-        let now = Some((editor.revision, editor.syntax.version));
+        let now = Some((editor.revision, editor.syntax.version, editor.fold_version));
         if self.seen == now
             && let Some(galley) = &self.galley
         {
@@ -178,7 +180,14 @@ impl Layout {
         let count = lines.len() - usize::from(lines.len() > 1 && lines[lines.len() - 1].is_empty());
         let trailing = count < lines.len();
         let keys: Vec<u64> = (0..count)
-            .map(|row| editor.syntax.lines[row].key ^ u64::from(trailing && row + 1 == count))
+            .map(|row| {
+                let key = editor.syntax.lines[row].key ^ u64::from(trailing && row + 1 == count);
+                if editor.is_hidden(row) {
+                    key ^ HIDDEN
+                } else {
+                    key
+                }
+            })
             .collect();
         // Lo habitual es que cambien unas pocas filas seguidas.
         let head = self
@@ -206,6 +215,11 @@ impl Layout {
                 let last = trailing && row + 1 == count;
                 if let Some(galley) = self.cache.get(&keys[row]) {
                     return galley.clone();
+                }
+                if editor.is_hidden(row) {
+                    let galley = hidden(ui, &lines[row], last);
+                    self.cache.insert(keys[row], galley.clone());
+                    return galley;
                 }
                 if row.abs_diff(cursor) > NEAR && started.elapsed() > BUDGET {
                     pending = true;
@@ -254,6 +268,23 @@ impl Layout {
         self.galley = Some(galley.clone());
         galley
     }
+}
+
+/// Una línea oculta por un pliegue: conserva su texto, que el widget sigue
+/// editando, pero no ocupa alto ni se ve.
+fn hidden(ui: &egui::Ui, text: &str, newline: bool) -> Arc<Galley> {
+    let format = TextFormat {
+        font_id: FontId::monospace(1.0),
+        color: Color32::TRANSPARENT,
+        line_height: Some(0.0),
+        ..Default::default()
+    };
+    let text = if newline {
+        format!("{text}\n")
+    } else {
+        text.to_owned()
+    };
+    ui.fonts_mut(|fonts| fonts.layout_job(LayoutJob::single_section(text, format)))
 }
 
 fn paragraph(

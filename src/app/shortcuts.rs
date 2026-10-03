@@ -94,6 +94,11 @@ impl App {
         } else if Self::shortcut(ctx, Modifiers::NONE, Key::F8) {
             self.next_problem(false);
         }
+        if Self::shortcut(ctx, Modifiers::SHIFT, Key::F9) {
+            self.fold_everything(false);
+        } else if Self::shortcut(ctx, Modifiers::NONE, Key::F9) {
+            self.toggle_fold_at_cursor();
+        }
         if Self::shortcut(ctx, Modifiers::NONE, Key::F12) {
             self.goto_definition(self.editor().cursor);
         }

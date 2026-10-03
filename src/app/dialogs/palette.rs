@@ -42,6 +42,9 @@ pub(in crate::app) enum Command {
     TogglePreview,
     ToggleWrap,
     ToggleSplit,
+    Fold,
+    FoldAll,
+    UnfoldAll,
     ToggleProblems,
     ToggleMascot,
     Bold,
@@ -200,6 +203,19 @@ impl App {
                 "Mod+\\",
                 true,
                 Command::ToggleSplit,
+            ),
+            (
+                "Plegar o desplegar el bloque del cursor",
+                "F9",
+                editable,
+                Command::Fold,
+            ),
+            ("Plegar todo", "", editable, Command::FoldAll),
+            (
+                "Desplegar todo",
+                "Shift+F9",
+                editable && editor.has_folds(),
+                Command::UnfoldAll,
             ),
             (
                 "Mostrar u ocultar problemas y registro",
@@ -388,6 +404,9 @@ impl App {
                 self.preferences_changed(ctx);
             }
             Command::ToggleSplit => self.toggle_split(),
+            Command::Fold => self.toggle_fold_at_cursor(),
+            Command::FoldAll => self.fold_everything(true),
+            Command::UnfoldAll => self.fold_everything(false),
             Command::ToggleProblems => self.panel = !self.panel,
             Command::ToggleMascot => {
                 self.config.mascot = !self.config.mascot;
