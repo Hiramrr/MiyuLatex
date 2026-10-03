@@ -12,6 +12,7 @@ mod layout;
 mod marks;
 mod mascot;
 mod mdview;
+mod pdftext;
 mod preview;
 mod spell;
 mod synctex;

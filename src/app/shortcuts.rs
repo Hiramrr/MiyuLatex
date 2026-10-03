@@ -317,6 +317,9 @@ impl App {
         }
     }
     pub(super) fn start_find(&mut self) {
+        if self.editor().format == Format::Pdf {
+            self.focus_pdf_find = true;
+        }
         if !self.editor().format.editable() {
             return;
         }

@@ -112,7 +112,17 @@ columna que se recorre con la rueda o el trackpad. El zoom se ajusta con los
 botones, con el gesto de pellizco o con `Cmd` y la rueda. Ajustar vuelve al
 ancho del panel. Cada página se rasteriza a la resolución de la pantalla y solo
 cuando se ve. Al recompilar se conserva la posición. Cada pestaña conserva su
-página y su zoom. También puedes ver PNG, JPEG, WebP, GIF y BMP. La compilación automática
+página y su zoom.
+
+El campo Buscar del visor resalta las coincidencias en todas las páginas, sin
+distinguir mayúsculas. Enter y Mayús+Enter van a la siguiente o a la anterior.
+En una pestaña de PDF, `Cmd+F` lleva al campo. Una palabra partida con guion
+al final de una línea se encuentra entera. Arrastrar sobre una página
+selecciona su texto, y `Cmd+C` o el clic derecho lo copian. La selección no
+pasa de una página a otra. Los PDF escaneados sin capa de texto no tienen
+nada que buscar.
+
+También puedes ver PNG, JPEG, WebP, GIF y BMP. La compilación automática
 solo se aplica a LaTeX. PDF e imágenes no pasan por el guardado de texto.
 
 El diálogo Nuevo documento permite crear LaTeX, bibliografía, Markdown, texto,
@@ -311,7 +321,7 @@ miyu --render-background foto.png fondo.png 1280 800 2 1 16131f dither
 `layout.rs` maqueta solo las que cambian. `format.rs` detecta formatos y extrae
 el esquema de Markdown, `latex.rs` reúne fuentes, etiquetas, citas, historial y
 ZIP del proyecto, `compiler.rs` compila y lee problemas, `synctex.rs` relaciona
-el código con el PDF, `preview.rs` rasteriza y dibuja el PDF, `spell.rs` revisa
+el código con el PDF, `preview.rs` rasteriza y dibuja el PDF, `pdftext.rs` lee su texto, `spell.rs` revisa
 la ortografía, `workspace.rs` lleva la sesión y los archivos, `backdrop.rs` trama la foto, `theme.rs` define
 los temas, `custom.rs` aplica la personalización y `config.rs` guarda
 preferencias. `snippets.json` conserva los catálogos de la versión Python.

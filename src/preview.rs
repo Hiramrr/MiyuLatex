@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     sync::mpsc::{self, Receiver, Sender},
@@ -8,9 +8,10 @@ use std::{
 };
 
 use eframe::egui::{self, Color32, ColorImage, TextureHandle, TextureOptions};
+use crate::pdftext::{self, PageText};
 use hayro::{
     RenderCache, RenderSettings,
-    hayro_interpret::InterpreterSettings,
+    hayro_interpret::{InterpreterCache, InterpreterSettings},
     hayro_syntax::{Pdf, page::Page},
     render,
     vello_cpu::color::palette::css::WHITE,
@@ -92,7 +93,31 @@ enum Reply {
         generation: u64,
         image: Option<ColorImage>,
     },
+    Text {
+        page: usize,
+        text: PageText,
+    },
+    /// Ya llegó el texto de todas las páginas.
+    TextDone,
     Failed(String),
+}
+
+/// Lee el texto de todas las páginas en su propio hilo, para no retrasar
+/// el rasterizado de las que se ven.
+fn read_text(data: Vec<u8>, replies: Sender<Reply>) {
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        let Ok(pdf) = Pdf::new(data) else { return };
+        let cache = InterpreterCache::new();
+        let pages = pdf.pages();
+        for page in 0..pages.len() {
+            let text = catch_unwind(AssertUnwindSafe(|| pdftext::extract(&pages[page], &cache)))
+                .unwrap_or_default();
+            if replies.send(Reply::Text { page, text }).is_err() {
+                return;
+            }
+        }
+    }));
+    let _ = replies.send(Reply::TextDone);
 }
 
 /// El hilo conserva el PDF abierto: rasterizar otra página no vuelve a leerlo.
@@ -179,6 +204,19 @@ pub struct Preview {
     target: Option<usize>,
     /// Resolución pedida y desde cuándo; no se rehace mientras cambia.
     wanted: (f32, Instant),
+    /// Texto de las páginas que ya se leyeron.
+    texts: BTreeMap<usize, PageText>,
+    /// Aún falta leer el texto de alguna página.
+    reading: bool,
+    /// Texto que se busca en el PDF.
+    query: String,
+    /// Coincidencias de `query`: página y tramo de su texto, en orden.
+    matches: Vec<(usize, usize, usize)>,
+    current: Option<usize>,
+    /// Llevar la vista a la coincidencia actual en el próximo cuadro.
+    reveal: bool,
+    /// Texto seleccionado: página, carácter donde empezó y donde acaba.
+    selection: Option<(usize, usize, usize)>,
 }
 
 impl Preview {
@@ -201,7 +239,62 @@ impl Preview {
             in_flight: None,
             target: None,
             wanted: (0.0, Instant::now()),
+            texts: BTreeMap::new(),
+            reading: false,
+            query: String::new(),
+            matches: Vec::new(),
+            current: None,
+            reveal: false,
+            selection: None,
         }
+    }
+    pub fn query(&self) -> &str {
+        &self.query
+    }
+    /// Busca `query` en el texto leído y va a la primera coincidencia desde
+    /// la página que se ve.
+    pub fn search(&mut self, query: &str) {
+        self.query = query.into();
+        self.matches = self
+            .texts
+            .iter()
+            .flat_map(|(page, text)| {
+                text.find(query)
+                    .into_iter()
+                    .map(|(start, end)| (*page, start, end))
+            })
+            .collect();
+        self.current = self
+            .matches
+            .iter()
+            .position(|found| found.0 >= self.page)
+            .or((!self.matches.is_empty()).then_some(0));
+        self.reveal = self.current.is_some();
+    }
+    pub fn find_next(&mut self, backwards: bool) {
+        let count = self.matches.len();
+        if count == 0 {
+            return;
+        }
+        self.current = Some(match self.current {
+            Some(current) if backwards => (current + count - 1) % count,
+            Some(current) => (current + 1) % count,
+            None => 0,
+        });
+        self.reveal = true;
+    }
+    /// Posición de la coincidencia actual, desde 1, y cuántas hay.
+    pub fn found(&self) -> (Option<usize>, usize) {
+        (self.current.map(|i| i + 1), self.matches.len())
+    }
+    /// Falta leer el texto de alguna página: la búsqueda aún puede crecer.
+    pub fn reading(&self) -> bool {
+        self.reading
+    }
+    pub fn selected_text(&self) -> Option<String> {
+        let (page, anchor, head) = self.selection?;
+        let text = self.texts.get(&page)?;
+        Some(text.text(anchor.min(head), anchor.max(head) + 1))
     }
     /// Páginas con imagen lista.
     #[cfg(test)]
@@ -220,13 +313,21 @@ impl Preview {
             self.rasters.clear();
             self.target = None;
         }
+        // Las coincidencias vuelven a aparecer según se lee el texto nuevo.
+        self.texts.clear();
+        self.matches.clear();
+        self.current = None;
+        self.selection = None;
+        self.reading = true;
         // Al recompilar se ven las páginas anteriores hasta que llegan las nuevas.
         self.generation += 1;
         self.broken.clear();
         self.path = Some(path.into());
         let (request_tx, request_rx) = mpsc::channel();
         let (reply_tx, reply_rx) = mpsc::channel();
+        let (text_data, text_tx) = (data.clone(), reply_tx.clone());
         thread::spawn(move || work(data, request_rx, reply_tx));
+        thread::spawn(move || read_text(text_data, text_tx));
         // Soltar el canal anterior termina el hilo del PDF anterior.
         self.requests = Some(request_tx);
         self.replies = Some(reply_rx);
@@ -293,7 +394,24 @@ impl Preview {
                         }
                     }
                 }
+                Reply::Text { page, text } => {
+                    if !self.query.is_empty() {
+                        let found = text.find(&self.query);
+                        self.matches
+                            .extend(found.into_iter().map(|(start, end)| (page, start, end)));
+                        if self.current.is_none() && !self.matches.is_empty() {
+                            self.current = Some(0);
+                        }
+                    }
+                    self.texts.insert(page, text);
+                }
+                Reply::TextDone => self.reading = false,
                 Reply::Failed(error) => {
+                    self.reading = false;
+                    self.texts.clear();
+                    self.matches.clear();
+                    self.current = None;
+                    self.selection = None;
                     self.error = error;
                     self.opening = false;
                     self.in_flight = None;
@@ -306,7 +424,7 @@ impl Preview {
                 }
             }
         }
-        self.loading = self.opening || self.in_flight.is_some();
+        self.loading = self.opening || self.in_flight.is_some() || self.reading;
         changed
     }
     fn evict(&mut self) {
@@ -402,7 +520,8 @@ impl Preview {
             .id_salt(id)
             .auto_shrink([false, false])
             .show_viewport(ui, |ui, viewport| {
-                let (area, response) = ui.allocate_exact_size(total, egui::Sense::click());
+                let (area, response) =
+                    ui.allocate_exact_size(total, egui::Sense::click_and_drag());
                 let sizes = &self.sizes;
                 let page_rect = |page: usize| {
                     let size = egui::vec2(sizes[page].0, sizes[page].1) * scale;
@@ -451,7 +570,110 @@ impl Preview {
                         egui::StrokeKind::Outside,
                     );
                 }
+                // Caja del texto de una página, en la pantalla.
+                let on_screen = |page: usize, b: pdftext::Bounds| {
+                    let origin = page_rect(page).min;
+                    egui::Rect::from_min_max(
+                        origin + egui::vec2(b[0], b[1]) * scale,
+                        origin + egui::vec2(b[2], b[3]) * scale,
+                    )
+                };
+                let found = Color32::from_rgba_unmultiplied(255, 196, 0, 90);
+                let first_match = self.matches.partition_point(|m| m.0 < first);
+                for (i, &(page, start, end)) in self.matches.iter().enumerate().skip(first_match) {
+                    if visible.last().is_none_or(|last| page > *last) {
+                        break;
+                    }
+                    let Some(text) = self.texts.get(&page) else {
+                        continue;
+                    };
+                    for bounds in text.rects(start, end) {
+                        let rect = on_screen(page, bounds);
+                        painter.rect_filled(rect, 2.0, found);
+                        if self.current == Some(i) {
+                            painter.rect_stroke(
+                                rect,
+                                2.0,
+                                egui::Stroke::new(1.5, accent),
+                                egui::StrokeKind::Outside,
+                            );
+                        }
+                    }
+                }
+                if let Some((page, anchor, head)) = self.selection
+                    && let Some(text) = self.texts.get(&page)
+                    && page < sizes.len()
+                {
+                    for bounds in text.rects(anchor.min(head), anchor.max(head) + 1) {
+                        painter.rect_filled(on_screen(page, bounds), 0.0, accent.gamma_multiply(0.35));
+                    }
+                }
+                // Carácter de una página más cercano a un punto de la pantalla.
+                let texts = &self.texts;
+                let character = |page: usize, position: egui::Pos2| {
+                    let point = (position - page_rect(page).min) / scale;
+                    texts.get(&page)?.nearest(point.x, point.y)
+                };
+                if response.drag_started_by(egui::PointerButton::Primary) {
+                    self.selection = ui
+                        .input(|i| i.pointer.press_origin())
+                        .and_then(|origin| {
+                            let page = visible
+                                .iter()
+                                .copied()
+                                .find(|page| page_rect(*page).contains(origin))?;
+                            Some((page, character(page, origin)?))
+                        })
+                        .map(|(page, at)| (page, at, at));
+                    response.request_focus();
+                } else if response.dragged_by(egui::PointerButton::Primary)
+                    && let Some((page, anchor, _)) = self.selection
+                    && let Some(position) = response.interact_pointer_pos()
+                    && let Some(head) = character(page, position)
+                {
+                    self.selection = Some((page, anchor, head));
+                } else if response.clicked() {
+                    self.selection = None;
+                    response.request_focus();
+                }
+                if response.hovered()
+                    && let Some(position) = response.hover_pos()
+                    && visible.iter().any(|page| {
+                        page_rect(*page).contains(position)
+                            && texts.get(page).is_some_and(|text| !text.is_empty())
+                    })
+                {
+                    ctx.set_cursor_icon(egui::CursorIcon::Text);
+                }
+                let selected = self.selected_text();
+                if response.has_focus()
+                    && let Some(text) = &selected
+                    && ui.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Copy)))
+                {
+                    ctx.copy_text(text.clone());
+                }
+                response.context_menu(|ui| {
+                    if ui
+                        .add_enabled(selected.is_some(), egui::Button::new("Copiar"))
+                        .clicked()
+                    {
+                        ctx.copy_text(selected.clone().unwrap_or_default());
+                        ui.close();
+                    }
+                });
                 let mut target = self.target.take().filter(|p| *p < sizes.len());
+                if std::mem::take(&mut self.reveal)
+                    && let Some(&(page, start, end)) = self.current.and_then(|i| self.matches.get(i))
+                    && let Some(bounds) = self
+                        .texts
+                        .get(&page)
+                        .and_then(|text| text.rects(start, end).into_iter().next())
+                    && page < sizes.len()
+                {
+                    ui.scroll_to_rect(on_screen(page, bounds), Some(egui::Align::Center));
+                    target = None;
+                    current = page;
+                }
                 if let Some((page, _, y)) = marker
                     && page < sizes.len()
                 {
@@ -543,6 +765,34 @@ impl Preview {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn searches_and_selects_pdf_text() {
+        let ctx = egui::Context::default();
+        let mut preview = Preview::new(false);
+        preview.search("ecuación");
+        preview.load(Path::new("examples/articulo.pdf")).unwrap();
+        let started = Instant::now();
+        while preview.reading() && started.elapsed() < Duration::from_secs(20) {
+            preview.poll(&ctx);
+            thread::sleep(Duration::from_millis(5));
+        }
+        // La búsqueda pendiente se resuelve al llegar el texto.
+        assert_eq!(preview.found(), (Some(1), 1));
+        preview.search("zzz");
+        assert_eq!(preview.found(), (None, 0));
+        preview.search("RESUMEN");
+        assert_eq!(preview.found(), (Some(1), 2));
+        preview.find_next(false);
+        assert_eq!(preview.found(), (Some(2), 2));
+        preview.find_next(false);
+        assert_eq!(preview.found(), (Some(1), 2));
+        preview.find_next(true);
+        assert_eq!(preview.found(), (Some(2), 2));
+        let (page, start, end) = preview.matches[0];
+        preview.selection = Some((page, end - 1, start));
+        assert_eq!(preview.selected_text().as_deref(), Some("Resumen"));
+    }
 
     #[test]
     fn zoom_steps_and_page_limits() {

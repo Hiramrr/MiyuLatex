@@ -122,6 +122,49 @@ impl App {
                 && let Some(path) = self.pdf_path().map(Path::to_path_buf)
                 && let Err(e) = self.pdf_mut().load(&path) { self.message = e; }
         });
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Buscar");
+            let mut query = self.pdf().query().to_owned();
+            let response = ui.add_enabled(
+                count > 0,
+                TextEdit::singleline(&mut query)
+                    .id_salt("pdf_find")
+                    .hint_text("Texto del PDF")
+                    .return_key(None)
+                    .desired_width(150.0),
+            );
+            if std::mem::take(&mut self.focus_pdf_find) {
+                response.request_focus();
+            }
+            if response.changed() {
+                self.pdf_mut().search(&query);
+            }
+            // Enter sigue buscando sin salir del campo; Mayús indica hacia atrás.
+            let mut step = None;
+            if response.has_focus() && Self::shortcut(ui.ctx(), Modifiers::NONE, Key::Enter) {
+                step = Some(ui.input(|i| i.modifiers.shift));
+            }
+            let (current, total) = self.pdf().found();
+            if action(ui, "Anterior", total > 0, "Va a la coincidencia anterior del PDF. Mayús+Enter. Requiere coincidencias.").clicked() {
+                step = Some(true);
+            }
+            if action(ui, "Siguiente", total > 0, "Va a la coincidencia siguiente del PDF. Enter. Requiere coincidencias.").clicked() {
+                step = Some(false);
+            }
+            if let Some(backwards) = step {
+                self.pdf_mut().find_next(backwards);
+            }
+            if !query.is_empty() {
+                match current {
+                    _ if total == 0 && self.pdf().reading() => ui.label("Leyendo el texto…"),
+                    _ if total == 0 => ui.label(
+                        RichText::new("Sin coincidencias").color(col(self.theme.error)),
+                    ),
+                    Some(current) => ui.label(format!("{current} de {total}")),
+                    None => ui.label(format!("{total} coincidencias")),
+                };
+            }
+        });
         ui.separator();
         if !self.pdf().error.is_empty() {
             ui.colored_label(col(self.theme.error), &self.pdf().error);
