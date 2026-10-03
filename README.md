@@ -160,6 +160,7 @@ Abre y guarda otros lenguajes con su extensión.
 | `F8` / `Shift+F8` | Problema siguiente / anterior de la compilación |
 | `F12` / `Cmd`+clic | Ir a la etiqueta, la cita o el archivo señalado |
 | `Cmd+Shift+J` | Mostrar en el PDF la línea del cursor |
+| `Cmd+Shift+M` | Vista previa de la ecuación del cursor |
 | `Cmd+T` | Insertar un símbolo LaTeX |
 | `Cmd+B` / `Cmd+I` / `Cmd+/` | Negrita, cursiva o comentar líneas |
 | `Cmd+Shift+I` | Formatear el documento |
@@ -216,6 +217,14 @@ encima, se desplazan hasta que vuelvas a compilar.
 `F12` o `Cmd`+clic sobre `\ref`, `\eqref` o `\cref` lleva a su `\label`; sobre
 `\cite` y sus variantes, a la entrada de la bibliografía; y sobre `\input`,
 `\include`, `\addbibresource` o `\includegraphics`, abre el archivo.
+
+Vista previa de la ecuación (`Cmd+Shift+M`), en LaTeX, abre una ventana con
+la fórmula que rodea al cursor: `$…$`, `\[…\]` o un entorno como `equation`
+o `align`. Se compila aparte con el preámbulo del documento, así que valen
+sus paquetes y macros, y se actualiza al dejar de escribir. Si el preámbulo
+no funciona por separado, por ejemplo con `beamer`, se usa uno mínimo con
+`amsmath`. Tarda lo que el motor en compilar un documento de una línea, uno
+o dos segundos con Tectonic.
 
 Renombrar etiqueta LaTeX, en Editar, cambia la etiqueta bajo el cursor en su
 `\label` y en todas sus referencias del proyecto, sin tocar los comentarios.

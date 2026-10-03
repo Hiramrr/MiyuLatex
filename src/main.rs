@@ -6,6 +6,7 @@ mod config;
 mod custom;
 mod diff;
 mod editor;
+mod equation;
 mod format;
 mod formatter;
 mod git;

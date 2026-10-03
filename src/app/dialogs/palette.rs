@@ -51,6 +51,7 @@ pub(in crate::app) enum Command {
     Reference,
     Citation,
     CheckBibliography,
+    Equation,
     Compile,
     Stop,
     Rebuild,
@@ -233,6 +234,12 @@ impl App {
                 Command::CheckBibliography,
             ),
             (
+                "Vista previa de la ecuación",
+                "Mod+Shift+M",
+                latex,
+                Command::Equation,
+            ),
+            (
                 "Compilar",
                 "F5",
                 !compiling && (latex || saved_source),
@@ -385,6 +392,7 @@ impl App {
             }
             Command::Citation => self.open_citation(),
             Command::CheckBibliography => self.check_bibliography(),
+            Command::Equation => self.toggle_equation(),
             Command::Compile => self.compile(false, ctx),
             Command::Stop => {
                 self.cancel.store(true, Ordering::Relaxed);

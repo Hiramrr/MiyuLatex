@@ -1020,3 +1020,59 @@ fn formats_the_document_with_the_language_tool() {
     assert!(app.tool_rx.is_none());
     fs::remove_dir_all(folder).unwrap();
 }
+
+#[test]
+fn previews_the_equation_under_the_cursor() {
+    if compiler::engines().is_empty() {
+        return;
+    }
+    let folder = std::env::temp_dir().join(format!("miyu-ecuacion-gui-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let main = folder.join("main.tex");
+    fs::write(
+        &main,
+        "\\documentclass{article}\n\\newcommand{\\R}{\\mathbb{R}}\n\\usepackage{amssymb}\n\\begin{document}\nSea $x \\in \\R$ y $\\noexiste$.\n\\end{document}\n",
+    )
+    .unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(main), &ctx).unwrap();
+    app.backdrop = Backdrop::default();
+    tick(&mut app, &ctx, vec![]);
+    let wait = |app: &mut App| {
+        let started = Instant::now();
+        tick(app, &ctx, vec![]);
+        while !app.equation.ready() && started.elapsed() < Duration::from_secs(60) {
+            thread::sleep(Duration::from_millis(20));
+            tick(app, &ctx, vec![]);
+        }
+    };
+    // Fuera de una fórmula no se compila nada.
+    tick(
+        &mut app,
+        &ctx,
+        vec![key(Key::M, Modifiers::COMMAND | Modifiers::SHIFT)],
+    );
+    assert!(app.equation.open);
+    wait(&mut app);
+    assert!(app.equation.size().is_none());
+    // La macro del preámbulo vale dentro de la fórmula.
+    app.editor_mut().goto(4, 6);
+    app.sync_cursor = true;
+    wait(&mut app);
+    assert!(app.equation.error.is_empty(), "{}", app.equation.error);
+    let size = app.equation.size().unwrap();
+    assert!(size.x > 20.0 && size.y > 8.0, "{size:?}");
+    // Una fórmula que no compila deja el motivo y conserva la imagen anterior.
+    app.editor_mut().goto(4, 20);
+    app.sync_cursor = true;
+    wait(&mut app);
+    assert!(!app.equation.error.is_empty());
+    assert!(app.equation.size().is_some());
+    tick(
+        &mut app,
+        &ctx,
+        vec![key(Key::M, Modifiers::COMMAND | Modifiers::SHIFT)],
+    );
+    assert!(!app.equation.open);
+    fs::remove_dir_all(folder).unwrap();
+}

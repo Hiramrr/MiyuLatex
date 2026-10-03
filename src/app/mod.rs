@@ -111,6 +111,7 @@ pub struct App {
     history: Option<dialogs::History>,
     rename_label: Option<dialogs::RenameLabel>,
     citation: dialogs::Citation,
+    equation: dialogs::Equation,
     /// Avisos de la última revisión de la bibliografía, con la ventana abierta.
     bib_report: Option<Vec<Target>>,
     table: dialogs::Table,
@@ -224,6 +225,7 @@ impl App {
             history: None,
             rename_label: None,
             citation: dialogs::Citation::default(),
+            equation: dialogs::Equation::default(),
             bib_report: None,
             table: dialogs::Table::default(),
             palette: dialogs::Palette::default(),

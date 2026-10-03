@@ -77,6 +77,25 @@ pub fn render_page(
     Ok((DynamicImage::ImageRgba8(img), count, index))
 }
 
+/// Primera página de un PDF, a `pixels` píxeles por punto.
+pub fn render_first(data: Vec<u8>, pixels: f32, invert: bool) -> Result<ColorImage, String> {
+    let pdf = Pdf::new(data).map_err(|e| format!("PDF dañado o incompleto: {e:?}"))?;
+    let pages = pdf.pages();
+    if pages.is_empty() {
+        return Err("El PDF no tiene páginas".into());
+    }
+    let (width, height) = pages[0].render_dimensions();
+    if !valid((width, height)) {
+        return Err("El PDF tiene dimensiones de página inválidas".into());
+    }
+    let scale = pixels.min(MAX_SIDE / width.max(height));
+    let (width, height, data) = raster(&pages[0], scale, invert);
+    Ok(ColorImage::from_rgba_premultiplied(
+        [width as usize, height as usize],
+        &data,
+    ))
+}
+
 struct Request {
     page: usize,
     scale: f32,

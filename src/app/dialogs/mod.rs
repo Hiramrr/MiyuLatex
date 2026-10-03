@@ -3,12 +3,14 @@
 use super::*;
 
 mod bib;
+mod equation;
 mod insert;
 mod palette;
 mod project;
 mod settings;
 
 pub(super) use bib::Citation;
+pub(super) use equation::Equation;
 pub(super) use insert::Table;
 pub(super) use palette::Palette;
 pub(super) use project::{History, ProjectSearch, RenameLabel};
@@ -19,6 +21,7 @@ impl App {
         self.history_dialog(ctx);
         self.bib_report_dialog(ctx);
         self.citation_dialog(ctx);
+        self.equation_dialog(ctx);
         self.rename_label_dialog(ctx);
         self.table_dialog(ctx);
         self.word_count_dialog(ctx);
@@ -73,6 +76,7 @@ impl App {
                         ("G", "Ir a línea"),
                         ("Shift+P", "Paleta de comandos"),
                         ("Shift+I", "Formatear el documento"),
+                        ("Shift+M", "Vista previa de la ecuación del cursor"),
                         ("Shift+O", "Abrir rápido un archivo del proyecto"),
                         ("Shift+F", "Buscar en el proyecto"),
                         ("Shift+J", "Mostrar la línea en el PDF"),

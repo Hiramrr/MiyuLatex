@@ -54,6 +54,9 @@ impl App {
         if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::I) {
             self.format_document(ctx);
         }
+        if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::M) {
+            self.toggle_equation();
+        }
         if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::P) {
             self.open_palette();
         } else if Self::shortcut(ctx, cmd, Key::P) || Self::shortcut(ctx, cmd, Key::Comma) {

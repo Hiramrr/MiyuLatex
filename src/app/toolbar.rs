@@ -260,6 +260,11 @@ impl App {
                         self.preferences_changed(&ctx);
                     }
                     ui.separator();
+                    if ui.checkbox(&mut self.equation.open, "Vista previa de la ecuación").on_hover_text("Muestra en una ventana la fórmula que rodea al cursor, compilada con el preámbulo del documento. Cmd/Ctrl+Mayús+M.").changed() {
+                        self.equation.open = !self.equation.open;
+                        self.toggle_equation();
+                        ui.close();
+                    }
                     if action(ui, "Revisar bibliografía…", saved_source, "Busca claves repetidas, campos obligatorios que faltan y entradas que ningún documento cita. Requiere un archivo LaTeX guardado.").clicked() {
                         self.check_bibliography();
                         ui.close();
