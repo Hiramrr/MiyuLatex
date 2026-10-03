@@ -231,6 +231,11 @@ impl App {
                                 row: problem.line?.saturating_sub(1),
                                 error: problem.severity == "error",
                                 message: problem.message.clone(),
+                                severity: match problem.severity.as_str() {
+                                    "error" => "error",
+                                    "warning" => "warning",
+                                    _ => "info",
+                                },
                             })
                         })
                         .collect();
@@ -279,8 +284,7 @@ impl App {
         let here = self.editor().path.clone();
         let row = self.editor().cursor.row;
         let mut local: Vec<usize> = self
-            .diagnostics
-            .iter()
+            .all_diagnostics()
             .filter(|d| Some(&d.path) == here.as_ref())
             .map(|d| d.row)
             .collect();
@@ -291,9 +295,10 @@ impl App {
         } else {
             local.iter().find(|r| **r > row).or(local.first())
         };
-        let (path, row) = match (target, self.diagnostics.first()) {
+        let first = self.all_diagnostics().next().map(|d| (d.path.clone(), d.row));
+        let (path, row) = match (target, first) {
             (Some(row), _) => (here.unwrap(), *row),
-            (None, Some(first)) => (first.path.clone(), first.row),
+            (None, Some(first)) => first,
             (None, None) => {
                 self.message = "La última compilación no dejó problemas con línea".into();
                 return;
@@ -305,8 +310,7 @@ impl App {
                 self.sync_cursor = true;
                 self.focus_editor = true;
                 self.message = self
-                    .diagnostics
-                    .iter()
+                    .all_diagnostics()
                     .filter(|d| d.path == path && d.row == row)
                     .map(|d| d.message.as_str())
                     .collect::<Vec<_>>()

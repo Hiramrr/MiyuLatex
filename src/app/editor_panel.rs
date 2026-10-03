@@ -195,6 +195,7 @@ impl App {
             self.editor_keys(&ctx);
         }
         let follow_cursor = primary && self.sync_cursor;
+        let hovering = primary && self.lsp_hover_enabled(self.documents[index].id);
         let doc = &mut self.documents[index];
         // Un salto a una línea plegada (buscar, ir a línea, un problema) la despliega.
         if follow_cursor && doc.editor.is_hidden(doc.editor.cursor.row) {
@@ -270,11 +271,18 @@ impl App {
         let mut wants = false;
         let mut corrected = false;
         // Problemas de la última compilación en este archivo.
+        let here = doc.editor.path.as_ref();
         let problems: Vec<&Diagnostic> = self
             .diagnostics
             .iter()
-            .filter(|d| Some(&d.path) == doc.editor.path.as_ref())
+            .filter(|d| Some(&d.path) == here)
             .collect();
+        // Los de los servidores pueden ser miles: vienen ordenados por fila.
+        let served: &[Diagnostic] = here
+            .and_then(|p| self.lsp.diagnostics.get(p))
+            .map_or(&[], Vec::as_slice);
+        // Hover del servidor de lenguaje: solo se vigila el ratón si hay uno que responda.
+        let mut hover_at = None;
         let mut definition = None;
         if doc.changes.0 != doc.editor.revision {
             let marks = doc
@@ -567,7 +575,14 @@ impl App {
                                     ));
                                 }
                             }
-                            let here = || problems.iter().filter(|d| d.row == line - 1);
+                            let here = || {
+                                let from = served.partition_point(|d| d.row < line - 1);
+                                problems
+                                    .iter()
+                                    .copied()
+                                    .filter(|d| d.row == line - 1)
+                                    .chain(served[from..].iter().take_while(|d| d.row == line - 1))
+                            };
                             if here().next().is_some() {
                                 let color = col(if here().any(|d| d.error) {
                                     theme.error
@@ -653,6 +668,15 @@ impl App {
                     shadows.append(&mut under);
                     ui.painter().set(under_text, egui::Shape::Vec(shadows));
                     ui.painter().extend(misspelled);
+                    if hovering {
+                        let pointer = ui
+                            .input(|i| i.pointer.hover_pos())
+                            .filter(|_| output.response.hovered());
+                        if let Some(pointer) = self.lsp.hover.rest(&ctx, doc.id, pointer) {
+                            let cursor = output.galley.cursor_from_pos(pointer - output.galley_pos);
+                            hover_at = Some(doc.editor.position(cursor.index.0));
+                        }
+                    }
                     // Cmd o Ctrl y clic llevan a la definición de lo señalado.
                     if output.response.clicked()
                         && ui.input(|i| i.modifiers.command)
@@ -690,6 +714,10 @@ impl App {
         if let Some(pos) = definition {
             self.goto_definition(pos);
         }
+        if let Some(pos) = hover_at {
+            self.lsp_hover(pos);
+        }
+        self.lsp_hover_ui(&ctx);
         if changed_document && completions {
             self.update_completion();
         }

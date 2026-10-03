@@ -141,6 +141,13 @@ impl App {
                     changed |= crate::spell::preferences(ui, &mut self.config);
                     changed |= ui
                         .checkbox(
+                            &mut self.config.lsp,
+                            "Servidores de lenguaje: diagnósticos, definición y hover",
+                        )
+                        .on_hover_text("Usa rust-analyzer, pyright, gopls, clangd o texlab si están instalados. Sin ellos el editor usa sus propias heurísticas.")
+                        .changed();
+                    changed |= ui
+                        .checkbox(
                             &mut self.config.restore_session,
                             "Volver a la última sesión al abrir sin argumentos",
                         )

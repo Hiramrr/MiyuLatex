@@ -16,6 +16,7 @@ mod hunspell;
 mod icons;
 mod latex;
 mod layout;
+mod lsp;
 mod marks;
 mod mascot;
 mod mdview;

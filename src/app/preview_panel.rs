@@ -449,6 +449,9 @@ impl App {
                     } else {
                         ui.label("Todavía no hay una compilación.");
                     }
+                    if !self.log {
+                        self.language_server_problems(ui, &mut jump);
+                    }
                 });
                 if let Some((path, line)) = jump {
                     match self.open(&path) {

@@ -114,6 +114,13 @@ impl App {
     /// Lleva a la etiqueta, la entrada de bibliografía o el archivo que nombra
     /// el comando LaTeX bajo `pos`.
     pub(super) fn goto_definition(&mut self, pos: crate::editor::Pos) {
+        // Con servidor de lenguaje la respuesta llega después; si no hay, tarda
+        // demasiado o viene vacía, `lsp_outcome` recurre a la heurística local.
+        if !self.lsp_definition(pos) {
+            self.goto_definition_local(pos);
+        }
+    }
+    pub(super) fn goto_definition_local(&mut self, pos: crate::editor::Pos) {
         let found = (self.editor().format == Format::Latex)
             .then(|| self.editor().lines.get(pos.row))
             .flatten()

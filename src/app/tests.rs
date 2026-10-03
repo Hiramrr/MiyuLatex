@@ -1,7 +1,7 @@
 use super::*;
 use crate::editor::Pos;
 
-fn tick(app: &mut App, ctx: &egui::Context, events: Vec<egui::Event>) {
+pub(super) fn tick(app: &mut App, ctx: &egui::Context, events: Vec<egui::Event>) {
     let input = egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(
             egui::Pos2::ZERO,
@@ -16,7 +16,7 @@ fn tick(app: &mut App, ctx: &egui::Context, events: Vec<egui::Event>) {
     assert!(!output.shapes.is_empty());
     output.textures_delta.clear();
 }
-fn key(key: Key, modifiers: Modifiers) -> egui::Event {
+pub(super) fn key(key: Key, modifiers: Modifiers) -> egui::Event {
     egui::Event::Key {
         key,
         physical_key: None,
@@ -978,6 +978,7 @@ fn definition_problems_and_command_palette() {
             row,
             error,
             message: format!("problema {row}"),
+            severity: if error { "error" } else { "warning" },
         });
     }
     app.editor_mut().goto(0, 0);

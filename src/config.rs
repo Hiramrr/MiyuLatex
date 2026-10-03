@@ -43,6 +43,8 @@ pub struct Config {
     pub tab_width: usize,
     pub auto_pairs: bool,
     pub completions: bool,
+    /// Servidores de lenguaje (LSP) para diagnósticos, definición y hover.
+    pub lsp: bool,
     pub corner_radius: f64,
     /// El gatito que vive sobre la barra de estado.
     pub mascot: bool,
@@ -108,6 +110,7 @@ impl Default for Config {
             tab_width: 4,
             auto_pairs: true,
             completions: true,
+            lsp: true,
             corner_radius: 0.0,
             mascot: true,
             mascot_friend: true,

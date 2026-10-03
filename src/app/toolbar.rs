@@ -149,7 +149,7 @@ impl App {
                         self.format_document(&ctx);
                         ui.close();
                     }
-                    if action(ui, "Ir a la definición", latex, "Lleva a la etiqueta, la entrada de bibliografía o el archivo del comando bajo el cursor. F12 o Cmd/Ctrl+clic. Disponible en LaTeX.").clicked() {
+                    if action(ui, "Ir a la definición", latex || self.has_language_server(), "Lleva a la etiqueta, la entrada de bibliografía o el archivo del comando bajo el cursor; con un servidor de lenguaje, a la definición del símbolo. F12 o Cmd/Ctrl+clic. Disponible en LaTeX o con servidor.").clicked() {
                         self.goto_definition(self.editor().cursor);
                         ui.close();
                     }
@@ -157,7 +157,7 @@ impl App {
                         self.start_rename_label();
                         ui.close();
                     }
-                    if action(ui, "Problema siguiente", !self.diagnostics.is_empty(), "Lleva el cursor al siguiente problema de la última compilación. F8; con Mayús, al anterior.").clicked() {
+                    if action(ui, "Problema siguiente", self.all_diagnostics().next().is_some(), "Lleva el cursor al siguiente problema de la última compilación. F8; con Mayús, al anterior.").clicked() {
                         self.next_problem(false);
                         ui.close();
                     }

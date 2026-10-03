@@ -125,7 +125,7 @@ impl App {
             .documents
             .iter()
             .any(|d| d.editor.format.editable() && (d.editor.dirty() || d.editor.path.is_none()));
-        let problems = !self.diagnostics.is_empty();
+        let problems = self.all_diagnostics().next().is_some();
         vec![
             ("Nuevo documento…", "Mod+N", true, Command::NewDocument),
             ("Abrir archivo…", "Mod+O", true, Command::Open),
@@ -217,7 +217,7 @@ impl App {
                 self.formatter_name().is_some() && tool_ready,
                 Command::Format,
             ),
-            ("Ir a la definición", "F12", latex, Command::Definition),
+            ("Ir a la definición", "F12", latex || self.has_language_server(), Command::Definition),
             ("Renombrar etiqueta LaTeX…", "", latex, Command::RenameLabel),
             ("Problema siguiente", "F8", problems, Command::NextProblem),
             (

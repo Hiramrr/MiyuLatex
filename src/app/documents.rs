@@ -183,6 +183,7 @@ impl App {
                 }
                 self.refresh_sources();
                 self.git_touched();
+                self.lsp_saved(index);
                 true
             }
             Err(e) => {

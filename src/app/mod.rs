@@ -37,6 +37,7 @@ mod documents;
 mod editor_panel;
 mod export;
 mod git_panel;
+mod language_server;
 #[cfg(target_os = "macos")]
 mod native_menu;
 mod preview_panel;
@@ -84,6 +85,7 @@ struct Diagnostic {
     row: usize,
     error: bool,
     message: String,
+    severity: &'static str,
 }
 enum ToolResult {
     Message(String),
@@ -156,6 +158,7 @@ pub struct App {
     log: bool,
     developer: developer::State,
     git: git_panel::State,
+    lsp: language_server::State,
     settings: bool,
     project_options: bool,
     templates: bool,
@@ -277,6 +280,7 @@ impl App {
             log: false,
             developer: developer::State::default(),
             git: git_panel::State::default(),
+            lsp: language_server::State::default(),
             settings: false,
             project_options: false,
             templates: false,
@@ -338,6 +342,7 @@ impl App {
         self.watch_disk(&ctx);
         self.poll_terminals(&ctx);
         self.poll_git(&ctx);
+        self.poll_lsp(&ctx);
         self.refresh_tasks();
         self.update_goal(&ctx);
         // La barra de búsqueda se cierra con Esc sin consumirla.
@@ -394,6 +399,10 @@ impl App {
                             self.theme.muted()
                         };
                         ui.label(RichText::new(text).size(13.0).color(col(color)))
+                            .on_hover_text(hover);
+                    }
+                    if let Some((text, hover)) = self.lsp_status() {
+                        ui.label(RichText::new(text).size(13.0).color(col(self.theme.muted())))
                             .on_hover_text(hover);
                     }
                     if let Some(git) = &self.documents[self.active].git {
@@ -524,6 +533,7 @@ impl App {
     }
     fn shutdown(&mut self) {
         self.developer.terminals.clear();
+        self.lsp.hub_shutdown();
         self.remember_session();
         if let Some(window) = self.window {
             self.config.window_x = window.min.x.into();
