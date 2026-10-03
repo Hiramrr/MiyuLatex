@@ -947,3 +947,40 @@ fn bibliography_report_and_downloaded_citations() {
     assert!(!fs::read_to_string(&bib).unwrap().contains("otra"));
     fs::remove_dir_all(folder).unwrap();
 }
+
+#[test]
+fn formats_the_document_with_the_language_tool() {
+    if compiler::which("rustfmt").is_none() {
+        return;
+    }
+    let folder = std::env::temp_dir().join(format!("miyu-formatear-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("main.rs");
+    fs::write(&path, "fn main(){let x=1;}\n").unwrap();
+    fs::write(folder.join("notas.txt"), "hola\n").unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(path), &ctx).unwrap();
+    app.backdrop = Backdrop::default();
+    tick(&mut app, &ctx, vec![]);
+    tick(
+        &mut app,
+        &ctx,
+        vec![key(Key::I, Modifiers::COMMAND | Modifiers::SHIFT)],
+    );
+    let started = Instant::now();
+    while app.tool_rx.is_some() && started.elapsed() < Duration::from_secs(20) {
+        tick(&mut app, &ctx, vec![]);
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(app.editor().text(), "fn main() {\n    let x = 1;\n}\n");
+    assert!(app.editor().dirty());
+    // Se deshace en un solo paso.
+    app.editor_mut().undo(false);
+    assert_eq!(app.editor().text(), "fn main(){let x=1;}\n");
+    // Sin formateador conocido no se lanza nada.
+    app.open(&folder.join("notas.txt")).unwrap();
+    assert!(app.formatter_name().is_none());
+    app.format_document(&ctx);
+    assert!(app.tool_rx.is_none());
+    fs::remove_dir_all(folder).unwrap();
+}

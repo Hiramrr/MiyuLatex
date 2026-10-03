@@ -33,6 +33,7 @@ pub(in crate::app) enum Command {
     GotoLine,
     SearchProject,
     Comment,
+    Format,
     Definition,
     RenameLabel,
     NextProblem,
@@ -157,6 +158,12 @@ impl App {
                 "Mod+/",
                 editable && editor.format.comment().is_some(),
                 Command::Comment,
+            ),
+            (
+                "Formatear documento",
+                "Mod+Shift+I",
+                self.formatter_name().is_some() && tool_ready,
+                Command::Format,
             ),
             ("Ir a la definición", "F12", latex, Command::Definition),
             ("Renombrar etiqueta LaTeX…", "", latex, Command::RenameLabel),
@@ -342,6 +349,7 @@ impl App {
                 self.editor_mut().rewrite_lines(true, false);
                 self.changed_editor();
             }
+            Command::Format => self.format_document(ctx),
             Command::Definition => self.goto_definition(self.editor().cursor),
             Command::RenameLabel => self.start_rename_label(),
             Command::NextProblem => self.next_problem(false),

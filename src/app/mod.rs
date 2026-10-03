@@ -75,6 +75,8 @@ enum ToolResult {
     Message(String),
     Imported(PathBuf),
     Words(String),
+    /// Documento, revisión que se formateó y texto formateado.
+    Formatted(Id, u64, String),
     /// Entrada BibTeX descargada.
     Citation(String),
     Forward(usize, f32, f32),

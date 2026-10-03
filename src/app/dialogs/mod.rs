@@ -72,6 +72,7 @@ impl App {
                         ("F", "Buscar y reemplazar"),
                         ("G", "Ir a línea"),
                         ("Shift+P", "Paleta de comandos"),
+                        ("Shift+I", "Formatear el documento"),
                         ("Shift+O", "Abrir rápido un archivo del proyecto"),
                         ("Shift+F", "Buscar en el proyecto"),
                         ("Shift+J", "Mostrar la línea en el PDF"),

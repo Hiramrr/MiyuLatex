@@ -102,6 +102,12 @@ Las flechas eligen una sugerencia, Tab la inserta y Esc cierra la lista;
 Ctrl+Espacio la abre sin haber escrito nada. Copiar o cortar sin selección toma la línea
 entera. Deshacer agrupa las letras escritas seguidas.
 
+Formatear documento (`Cmd+Shift+I`), en Editar, pasa el texto por la
+herramienta del lenguaje si está instalada: `latexindent` para LaTeX,
+`rustfmt`, `gofmt`, `ruff` para Python, `clang-format` para C, C++ y Java, y
+`prettier` para JavaScript, TypeScript, JSON, CSS, HTML, Markdown y YAML. El
+cambio queda en el editor sin guardar y se deshace en un paso.
+
 Buscar resalta las coincidencias y muestra la posición actual. Enter y
 Mayús+Enter avanzan o retroceden desde el campo de búsqueda, y Esc lo cierra.
 `Aa` distingue mayúsculas, `ab` busca palabras completas y `.*` permite
@@ -151,6 +157,7 @@ Abre y guarda otros lenguajes con su extensión.
 | `Cmd+Shift+J` | Mostrar en el PDF la línea del cursor |
 | `Cmd+T` | Insertar un símbolo LaTeX |
 | `Cmd+B` / `Cmd+I` / `Cmd+/` | Negrita, cursiva o comentar líneas |
+| `Cmd+Shift+I` | Formatear el documento |
 | `Tab` / `Shift+Tab` | Completar o añadir sangría / quitar sangría |
 | `Ctrl+Espacio` | Mostrar sugerencias |
 | `Alt+↑` / `Alt+↓` | Subir / bajar las líneas seleccionadas |

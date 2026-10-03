@@ -121,6 +121,10 @@ impl App {
                         self.search_project();
                         ui.close();
                     }
+                    if action(ui, "Formatear documento", self.formatter_name().is_some() && tool_ready, "Ordena la sangría y el estilo con la herramienta del lenguaje: latexindent, rustfmt, gofmt, ruff, clang-format o prettier. Cmd/Ctrl+Mayús+I. Requiere tenerla instalada.").clicked() {
+                        self.format_document(&ctx);
+                        ui.close();
+                    }
                     if action(ui, "Ir a la definición", latex, "Lleva a la etiqueta, la entrada de bibliografía o el archivo del comando bajo el cursor. F12 o Cmd/Ctrl+clic. Disponible en LaTeX.").clicked() {
                         self.goto_definition(self.editor().cursor);
                         ui.close();

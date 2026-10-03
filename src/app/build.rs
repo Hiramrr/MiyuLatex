@@ -84,6 +84,27 @@ impl App {
             match result {
                 Ok(ToolResult::Message(message)) => self.message = message,
                 Ok(ToolResult::Words(count)) => self.word_count = Some(count),
+                Ok(ToolResult::Formatted(id, revision, text)) => {
+                    let found = self
+                        .documents
+                        .iter_mut()
+                        .find(|d| d.id == id && d.editor.revision == revision);
+                    match found {
+                        Some(doc) if doc.editor.source() == text => {
+                            self.message = "El documento ya estaba formateado".into();
+                        }
+                        Some(doc) => {
+                            let (cursor, end) = (doc.editor.cursor, doc.editor.end());
+                            doc.editor.replace(crate::editor::Pos::new(0, 0), end, &text);
+                            doc.editor.goto(cursor.row, cursor.col);
+                            self.changed_editor();
+                            self.message = "Documento formateado. Puedes deshacer el cambio.".into();
+                        }
+                        None => {
+                            self.message = "El documento cambió mientras se formateaba; vuelve a intentarlo".into();
+                        }
+                    }
+                }
                 Ok(ToolResult::Citation(entry)) => {
                     if let Err(e) = self.add_citation(&entry) {
                         self.message = e;
@@ -383,6 +404,32 @@ impl App {
             ctx.request_repaint();
         });
         self.tool_rx = Some(rx);
+    }
+    /// Nombre con que se elige el formateador del documento activo.
+    pub(super) fn formatter_name(&self) -> Option<PathBuf> {
+        let editor = self.editor();
+        let name = editor
+            .path
+            .clone()
+            .unwrap_or_else(|| PathBuf::from(&editor.suggested_name));
+        (editor.format.editable() && crate::formatter::tool(&name).is_some()).then_some(name)
+    }
+    pub(super) fn format_document(&mut self, ctx: &egui::Context) {
+        let Some(name) = self.formatter_name() else {
+            self.message = "No conozco un formateador para este tipo de archivo".into();
+            return;
+        };
+        let (id, revision) = (self.documents[self.active].id, self.editor().revision);
+        let text = self.editor().source().to_owned();
+        self.message = format!(
+            "Formateando con {}…",
+            crate::formatter::tool(&name).unwrap_or_default()
+        );
+        self.start_tool(ctx, move || {
+            // El editor trabaja con \n; el final de línea original vuelve al guardar.
+            let formatted = crate::formatter::format(&name, &text)?.replace("\r\n", "\n");
+            Ok(ToolResult::Formatted(id, revision, formatted))
+        });
     }
     pub(super) fn count_words(&mut self, ctx: &egui::Context) {
         let Some(root) = self.root() else {
