@@ -519,6 +519,9 @@ pub fn preferences(
             changed |= ui
                 .checkbox(&mut config.mascot_dog, "Schnauzer amigo del gatito")
                 .changed();
+            changed |= ui
+                .checkbox(&mut config.mascot_jasmine, "Jazmín en su maceta")
+                .changed();
         });
         if !config.background.is_empty() {
             changed |= slider(

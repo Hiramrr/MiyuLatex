@@ -48,6 +48,8 @@ pub struct Config {
     pub mascot_friend: bool,
     /// El schnauzer que acompaña al gatito.
     pub mascot_dog: bool,
+    /// El jazmín en su maceta, junto al gatito.
+    pub mascot_jasmine: bool,
     pub autocompile_delay: f64,
     pub color_primary: String,
     pub color_secondary: String,
@@ -102,6 +104,7 @@ impl Default for Config {
             mascot: true,
             mascot_friend: true,
             mascot_dog: true,
+            mascot_jasmine: true,
             autocompile_delay: 1.2,
             color_primary: String::new(),
             color_secondary: String::new(),

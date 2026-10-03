@@ -136,6 +136,7 @@ impl App {
                     changed |= ui.checkbox(&mut self.config.mascot, "Gatito en la barra de estado").on_hover_text("Muestra u oculta la mascota. Teclea en su portátil mientras escribes, espera la compilación y se duerme si no hay actividad.").changed();
                     changed |= ui.add_enabled(self.config.mascot, egui::Checkbox::new(&mut self.config.mascot_friend, "Cangrejito amigo del gatito")).on_hover_text("Un cangrejito que pasea por la barra de estado y va a saludar al gatito.").changed();
                     changed |= ui.add_enabled(self.config.mascot, egui::Checkbox::new(&mut self.config.mascot_dog, "Schnauzer amigo del gatito")).on_hover_text("Un schnauzer que pasea por la barra de estado, menea la cola y ladra si la compilación falla.").changed();
+                    changed |= ui.add_enabled(self.config.mascot, egui::Checkbox::new(&mut self.config.mascot_jasmine, "Jazmín en su maceta")).on_hover_text("Un jazmín en la esquina de la barra de estado. Abre sus flores de noche, mientras el gatito duerme, y al compilar bien.").changed();
                     ui.separator();
                     ui.menu_button("Posición del panel de archivos", |ui| {
                         changed |= ui.radio_value(&mut self.config.sidebar_right, false, "Izquierda").changed();

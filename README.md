@@ -236,7 +236,11 @@ lame una pata, juega con un ovillo o se estira, y tras un minuto sin
 actividad se duerme. Lo acompañan un cangrejito que chasquea las pinzas y
 un schnauzer que menea la cola y ladra si la compilación falla: pasean por
 su cuenta y de vez en cuando van a saludarlo, y entonces saltan juntos.
-Cada uno se oculta con clic derecho sobre él, en Ver o en Apariencia.
+En la esquina crece un jazmín en su maceta que se mece con la brisa. Como el
+de verdad, abre sus flores blancas de noche: mientras el gatito duerme
+florece y suelta su perfume. También florece un rato al compilar bien o al
+hacerle clic. Cada uno se oculta con clic derecho sobre él, en Ver o en
+Apariencia.
 
 ## Fondo tramado
 

@@ -351,14 +351,22 @@ impl App {
         if self.config.mascot {
             let busy = self.compile_rx.is_some();
             let ok = self.result.as_ref().is_some_and(|r| r.ok);
-            let shown = [self.config.mascot_friend, self.config.mascot_dog];
-            let mut friends = shown;
+            let shown = [
+                self.config.mascot_friend,
+                self.config.mascot_dog,
+                self.config.mascot_jasmine,
+            ];
+            let mut company = shown;
             let hide = self
                 .mascot
-                .show(ui, floor, &self.theme, busy, ok, &mut friends);
-            if hide || friends != shown {
+                .show(ui, floor, &self.theme, busy, ok, &mut company);
+            if hide || company != shown {
                 self.config.mascot = !hide;
-                [self.config.mascot_friend, self.config.mascot_dog] = friends;
+                [
+                    self.config.mascot_friend,
+                    self.config.mascot_dog,
+                    self.config.mascot_jasmine,
+                ] = company;
                 self.preferences_changed(&ctx);
             }
         }
