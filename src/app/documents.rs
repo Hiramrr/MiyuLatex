@@ -180,6 +180,7 @@ impl App {
                     self.files = project_files(&self.project);
                 }
                 self.refresh_sources();
+                self.git_touched();
                 true
             }
             Err(e) => {

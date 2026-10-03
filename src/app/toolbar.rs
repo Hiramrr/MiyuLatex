@@ -155,6 +155,10 @@ impl App {
                 });
                 ui.menu_button("Ver", |ui| {
                     let mut changed = ui.checkbox(&mut self.config.show_sidebar, "Panel de archivos, esquema y referencias").on_hover_text("Muestra u oculta el panel lateral. F2.").changed();
+                    if action(ui, "Git: cambios, commit, ramas e historial", true, "Abre la pestaña Git del panel lateral. Cmd/Ctrl+Mayús+G.").clicked() {
+                        self.show_git(&ctx);
+                        ui.close();
+                    }
                     changed |= ui.checkbox(&mut self.config.show_preview, "Vista previa").on_hover_text("Muestra el PDF de LaTeX o la vista previa de Markdown. F3.").changed();
                     changed |= ui.checkbox(&mut self.config.soft_wrap, "Ajustar líneas al ancho del editor").changed();
                     let mut split = self.split.is_some();

@@ -45,12 +45,16 @@ impl App {
             ui.spacing_mut().item_spacing.x = 2.0;
             ui.horizontal_wrapped(|ui| {
                 if ui
-                    .selectable_label(!self.outline && !self.references, "Archivos")
+                    .selectable_label(
+                        !self.outline && !self.references && !self.git_active(),
+                        "Archivos",
+                    )
                     .on_hover_text("Explora y gestiona los archivos de la carpeta del proyecto.")
                     .clicked()
                 {
                     self.outline = false;
                     self.references = false;
+                    self.git.tab = false;
                 }
                 if ui
                     .selectable_label(self.outline, "Esquema")
@@ -68,10 +72,19 @@ impl App {
                     self.outline = false;
                     self.references = true;
                 }
+                if ui
+                    .selectable_label(self.git_active(), "Git")
+                    .on_hover_text("Cambios, commits, ramas, historial y stash del repositorio.")
+                    .clicked()
+                {
+                    self.show_git(ui.ctx());
+                }
             });
         });
         ui.separator();
-        if self.references {
+        if self.git_active() {
+            self.git_sidebar(ui);
+        } else if self.references {
             ui.add(
                 TextEdit::singleline(&mut self.reference_query)
                     .hint_text("Clave, autor o título")

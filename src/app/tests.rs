@@ -1465,3 +1465,130 @@ fn folds_blocks_in_the_editor() {
     assert!(!app.editor().has_folds());
     fs::remove_dir_all(folder).unwrap();
 }
+
+/// Dibuja hasta que `done` se cumple; los hilos de git responden en milisegundos.
+fn settle(app: &mut App, ctx: &egui::Context, done: impl Fn(&App) -> bool) {
+    for _ in 0..200 {
+        tick(app, ctx, vec![]);
+        if done(app) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    panic!("git no respondió a tiempo");
+}
+
+fn git_available() -> bool {
+    compiler::which("git").is_some()
+}
+
+fn git_in(folder: &Path, arguments: &[&str]) {
+    let done = std::process::Command::new("git")
+        .arg("-C")
+        .arg(folder)
+        .args(arguments)
+        .output()
+        .unwrap();
+    assert!(
+        done.status.success(),
+        "{}",
+        String::from_utf8_lossy(&done.stderr)
+    );
+}
+
+#[test]
+fn git_view_says_so_outside_a_repository() {
+    let folder = std::env::temp_dir().join(format!("miyu-gitview-none-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("a.tex");
+    fs::write(&path, "hola\n").unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(path), &ctx).unwrap();
+    app.config.mascot = false;
+    app.backdrop = Backdrop::default();
+    app.show_git(&ctx);
+    assert!(app.git_active());
+    settle(&mut app, &ctx, |app| app.git_loaded().is_some());
+    assert!(app.git_loaded().unwrap().is_none());
+    tick(&mut app, &ctx, vec![]);
+    // El atajo y la paleta también abren la vista.
+    app.config.show_sidebar = false;
+    tick(
+        &mut app,
+        &ctx,
+        vec![key(Key::G, Modifiers::COMMAND | Modifiers::SHIFT)],
+    );
+    assert!(app.config.show_sidebar && app.git_active());
+    fs::remove_dir_all(folder).unwrap();
+}
+
+#[test]
+fn git_view_stages_commits_and_guards_unsaved_documents() {
+    if !git_available() {
+        return;
+    }
+    let folder = std::env::temp_dir().join(format!("miyu-gitview-repo-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    for arguments in [
+        &["init", "-q", "-b", "main"][..],
+        &["config", "user.name", "Miyu"],
+        &["config", "user.email", "miyu@example.com"],
+        &["config", "commit.gpgsign", "false"],
+    ] {
+        git_in(&folder, arguments);
+    }
+    let path = folder.join("a.tex");
+    fs::write(&path, "uno\ndos\n").unwrap();
+    git_in(&folder, &["add", "."]);
+    git_in(&folder, &["commit", "-q", "-m", "inicio"]);
+    fs::write(&path, "uno\ndos\ntres\n").unwrap();
+    fs::write(folder.join("b.tex"), "nuevo\n").unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(path.clone()), &ctx).unwrap();
+    app.config.mascot = false;
+    app.backdrop = Backdrop::default();
+    app.show_git(&ctx);
+    settle(&mut app, &ctx, |app| app.git_loaded().is_some());
+    let snapshot = app.git_loaded().unwrap().unwrap();
+    assert_eq!(snapshot.branch, "main");
+    assert_eq!(snapshot.entries.len(), 2);
+    assert_eq!(snapshot.log.len(), 1);
+    // La línea 1 es de «inicio»; el autor llega a la barra de estado.
+    settle(&mut app, &ctx, |app| app.git_blame_text().is_some());
+    assert!(app.git_blame_text().unwrap().contains("Miyu"));
+    // Preparar un archivo, ver su diff y confirmar.
+    app.git_request(&ctx, git_panel::Op::Stage(vec!["a.tex".into()]));
+    settle(&mut app, &ctx, |app| {
+        app.git_idle()
+            && app
+                .git_loaded()
+                .flatten()
+                .is_some_and(|s| s.entries.iter().any(|e| e.staged()))
+    });
+    app.git_show_diff(
+        &ctx,
+        "a.tex".into(),
+        crate::repo::Target::Staged(vec!["a.tex".into()]),
+    );
+    settle(&mut app, &ctx, |app| app.git_diff_text().is_some());
+    assert!(app.git_diff_text().unwrap().contains("+tres"));
+    app.git_request(&ctx, git_panel::Op::Commit("segundo".into()));
+    settle(&mut app, &ctx, |app| {
+        app.git_idle() && app.git_loaded().flatten().is_some_and(|s| s.log.len() == 2)
+    });
+    assert!(matches!(app.git_notice(), Some(Ok(_))));
+    // Sin nada preparado el error de git queda a la vista.
+    app.git_request(&ctx, git_panel::Op::Commit("vacío".into()));
+    settle(&mut app, &ctx, |app| {
+        app.git_idle() && app.git_notice().is_some()
+    });
+    assert!(matches!(app.git_notice(), Some(Err(_))));
+    // Con cambios sin guardar no se cambia de rama sin preguntar.
+    git_in(&folder, &["branch", "otra"]);
+    let end = app.editor().end();
+    app.editor_mut().replace(Pos::new(0, 0), end, "distinto\n");
+    app.git_request(&ctx, git_panel::Op::Checkout("otra".into()));
+    assert!(app.git_confirming());
+    tick(&mut app, &ctx, vec![]);
+    fs::remove_dir_all(folder).unwrap();
+}

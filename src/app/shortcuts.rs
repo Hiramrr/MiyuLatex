@@ -37,6 +37,9 @@ impl App {
         if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::O) {
             self.open_quick();
         }
+        if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::G) {
+            self.show_git(ctx);
+        }
         if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::J) {
             self.sync_to_pdf(ctx);
         }

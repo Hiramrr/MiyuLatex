@@ -35,6 +35,7 @@ mod developer;
 mod dialogs;
 mod documents;
 mod editor_panel;
+mod git_panel;
 #[cfg(target_os = "macos")]
 mod native_menu;
 mod preview_panel;
@@ -146,6 +147,7 @@ pub struct App {
     panel: bool,
     log: bool,
     developer: developer::State,
+    git: git_panel::State,
     settings: bool,
     project_options: bool,
     templates: bool,
@@ -264,6 +266,7 @@ impl App {
             panel: false,
             log: false,
             developer: developer::State::default(),
+            git: git_panel::State::default(),
             settings: false,
             project_options: false,
             templates: false,
@@ -324,6 +327,7 @@ impl App {
         self.poll(&ctx);
         self.watch_disk(&ctx);
         self.poll_terminals(&ctx);
+        self.poll_git(&ctx);
         self.refresh_tasks();
         if ctx.input(|i| i.viewport().close_requested()) && !self.allow_quit {
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
@@ -360,6 +364,7 @@ impl App {
             ctx.send_viewport_cmd(ViewportCommand::Title(title));
         }
         self.toolbar(ui);
+        let blame = self.blame_label(&ctx);
         let status = egui::Panel::bottom("status").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(&self.message).size(13.0));
@@ -380,6 +385,15 @@ impl App {
                         } else {
                             "Rama del repositorio. Este archivo todavía no está en ningún commit."
                         });
+                    }
+                    if let Some((text, hover)) = &blame {
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(text).size(13.0).color(col(self.theme.muted())),
+                            )
+                            .truncate(),
+                        )
+                        .on_hover_text(hover);
                     }
                     if !self.editor().format.editable() {
                         return;

@@ -39,6 +39,7 @@ pub(in crate::app) enum Command {
     NextProblem,
     PreviousProblem,
     ToggleSidebar,
+    ShowGit,
     TogglePreview,
     ToggleWrap,
     ToggleSplit,
@@ -195,6 +196,12 @@ impl App {
                 "F2",
                 true,
                 Command::ToggleSidebar,
+            ),
+            (
+                "Mostrar Git: cambios, commit, ramas e historial",
+                "Mod+Shift+G",
+                true,
+                Command::ShowGit,
             ),
             (
                 "Mostrar u ocultar la vista previa",
@@ -430,6 +437,7 @@ impl App {
                 self.config.show_sidebar = !self.config.show_sidebar;
                 self.preferences_changed(ctx);
             }
+            Command::ShowGit => self.show_git(ctx),
             Command::TogglePreview => {
                 self.config.show_preview = !self.config.show_preview;
                 self.preferences_changed(ctx);

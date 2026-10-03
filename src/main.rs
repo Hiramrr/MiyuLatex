@@ -20,6 +20,7 @@ mod mascot;
 mod mdview;
 mod pdftext;
 mod preview;
+mod repo;
 mod spell;
 mod synctex;
 mod syntax;

@@ -32,6 +32,7 @@ impl App {
         self.symbols_dialog(ctx);
         self.goto_dialog(ctx);
         self.help_dialog(ctx);
+        self.git_dialog(ctx);
         self.palette_dialog(ctx);
         self.close_dialog(ctx);
     }

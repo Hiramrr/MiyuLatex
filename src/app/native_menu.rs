@@ -299,7 +299,7 @@ impl App {
                 NewProject | OpenFolder | NewFile | AddFiles | ImportZip | ExportZip => "Proyecto",
                 Undo | Redo | Find | GotoLine | SearchProject | Comment | Format | Definition
                 | RenameLabel | NextProblem | PreviousProblem => "Editar",
-                ToggleSidebar | TogglePreview | ToggleWrap | ToggleSplit | Fold | FoldAll
+                ToggleSidebar | ShowGit | TogglePreview | ToggleWrap | ToggleSplit | Fold | FoldAll
                 | UnfoldAll | ToggleProblems | ToggleMascot => "Ver",
                 ToggleTerminal | NewTerminal | RunCode | TestCode | CheckCode => "Desarrollo",
                 Bold | Italic | Symbol | Table | Figure | PasteImage | Reference | Citation => {
