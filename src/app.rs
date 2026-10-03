@@ -1645,6 +1645,8 @@ impl App {
             });
             ui.separator();
             ui.horizontal_wrapped(|ui| {
+                self.sidebar_toggle(ui);
+                ui.separator();
                 if action(ui, "Nuevo documento…", true, "Crea un documento sin guardar. Cmd/Ctrl+N.").clicked() { self.templates = true; }
                 if action(ui, "Abrir archivo…", true, "Abre un documento, código, PDF o imagen. Cmd/Ctrl+O.").clicked() { self.open_dialog(); }
                 if action(ui, "Guardar", editable, "Guarda la pestaña activa. Cmd/Ctrl+S. PDF e imágenes son de solo lectura.").clicked() { self.save_document(self.active, false); }
@@ -1669,27 +1671,45 @@ impl App {
         });
     }
     fn sidebar(&mut self, ui: &mut egui::Ui) {
-        if ui.ctx().viewport_rect().width() < 1020.0 {
-            let mut open = true;
-            egui::Window::new("Archivos, esquema y referencias")
-                .open(&mut open)
-                .collapsible(false)
-                .default_size([300.0, 440.0])
-                .show(ui.ctx(), |ui| self.sidebar_content(ui));
-            if !open {
-                self.config.show_sidebar = false;
-                self.preferences_changed(ui.ctx());
-            }
+        side_panel("files", self.config.sidebar_right)
+            .frame(egui::Frame::side_top_panel(ui.style()).fill(col(self.theme.surface)))
+            .default_size(240.0)
+            .min_size(160.0)
+            .show(ui, |ui| self.sidebar_content(ui));
+    }
+    /// Botón que oculta o muestra el panel lateral; la flecha apunta hacia
+    /// donde se moverá el panel.
+    fn sidebar_toggle(&mut self, ui: &mut egui::Ui) {
+        let shown = self.config.show_sidebar;
+        let arrow = if shown == self.config.sidebar_right {
+            "»"
         } else {
-            side_panel("files", self.config.sidebar_right)
-                .frame(egui::Frame::side_top_panel(ui.style()).fill(col(self.theme.surface)))
-                .default_size(240.0)
-                .min_size(180.0)
-                .show(ui, |ui| self.sidebar_content(ui));
+            "«"
+        };
+        let (label, help) = if shown {
+            (
+                format!("{arrow} Ocultar panel"),
+                "Oculta el panel de archivos, esquema y referencias. F2.",
+            )
+        } else {
+            (
+                format!("{arrow} Mostrar panel"),
+                "Muestra el panel de archivos, esquema y referencias. F2.",
+            )
+        };
+        if action(ui, &label, true, help).clicked() {
+            self.config.show_sidebar = !shown;
+            self.preferences_changed(ui.ctx());
         }
     }
     fn sidebar_content(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
+            let close = action(ui, "×", true, "Oculta el panel de archivos, esquema y referencias. Mostrar panel o F2 vuelve a abrirlo.");
+            close.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, close.enabled(), "Ocultar panel lateral"));
+            if close.clicked() {
+                self.config.show_sidebar = false;
+                self.preferences_changed(ui.ctx());
+            }
             if ui
                 .selectable_label(!self.outline && !self.references, "Archivos")
                 .on_hover_text("Explora y gestiona los archivos de la carpeta del proyecto.")
@@ -3345,6 +3365,19 @@ impl App {
                             .changed();
                     }
                     ui.separator();
+                    ui.label("Paneles");
+                    changed |= ui.checkbox(&mut self.config.show_sidebar, "Mostrar panel de archivos, esquema y referencias").changed();
+                    ui.horizontal(|ui| {
+                        ui.label("Panel lateral:");
+                        changed |= ui.radio_value(&mut self.config.sidebar_right, false, "Izquierda").changed();
+                        changed |= ui.radio_value(&mut self.config.sidebar_right, true, "Derecha").changed();
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Vista previa:");
+                        changed |= ui.radio_value(&mut self.config.preview_left, true, "Izquierda").changed();
+                        changed |= ui.radio_value(&mut self.config.preview_left, false, "Derecha").changed();
+                    });
+                    ui.separator();
                     ui.label("Motor LaTeX general");
                     let available = compiler::engines();
                     egui::ComboBox::from_id_salt("engine")
@@ -3759,7 +3792,9 @@ impl App {
             let ok = self.result.as_ref().is_some_and(|r| r.ok);
             let shown = [self.config.mascot_friend, self.config.mascot_dog];
             let mut friends = shown;
-            let hide = self.mascot.show(ui, floor, &self.theme, busy, ok, &mut friends);
+            let hide = self
+                .mascot
+                .show(ui, floor, &self.theme, busy, ok, &mut friends);
             if hide || friends != shown {
                 self.config.mascot = !hide;
                 [self.config.mascot_friend, self.config.mascot_dog] = friends;

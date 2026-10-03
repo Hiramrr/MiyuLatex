@@ -502,7 +502,7 @@ impl Mascot {
                 if step == 1 {
                     around.push((&PAW, -1, 6));
                 }
-                (if step % 2 == 0 { &SIT } else { &WAG }, 6.0)
+                (if step.is_multiple_of(2) { &SIT } else { &WAG }, 6.0)
             }
             Pose::Stretch => (&STRETCH[(frame(2.0) % 2) as usize], 2.0),
             Pose::Sit if typing && !jumping => {

@@ -53,9 +53,9 @@ Los botones explican su acción al pasar el cursor. Las acciones que requieren
 un documento editable, un PDF o una compilación en curso se desactivan cuando
 no están disponibles. Los archivos y el esquema están a la izquierda,
 las pestañas del editor en el centro y la vista previa a la derecha. El menú Ver
-permite ocultar cada panel o pasarlo al otro lado de la ventana. En ventanas
-estrechas, el panel lateral se abre en una ventana para conservar su acceso. Los
-problemas de compilación abren el archivo en la línea correspondiente.
+permite ocultar cada panel o pasarlo al otro lado de la ventana. Mostrar panel
+vuelve a abrir el panel lateral. La barra de botones se ajusta al ancho de la
+ventana. Los problemas de compilación abren el archivo en su línea.
 
 Nuevo proyecto, en la barra de herramientas o en Archivo, crea una carpeta
 con el nombre y la ubicación que elijas. Puedes dejarla vacía, usar una
