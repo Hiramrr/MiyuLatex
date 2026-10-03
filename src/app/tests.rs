@@ -95,6 +95,8 @@ fn developer_task_saves_code_and_keeps_terminal_focus() {
     app.developer.selected = true;
     app.config.ui_font_size = 22.0;
     app.apply_theme(&ctx);
+    // La fuente incluida reproduce en macOS el tamaño que usa Linux.
+    ctx.set_fonts(egui::FontDefinitions::default());
     let mut nodes = Vec::new();
     for _ in 0..2 {
         let mut output = ctx.run_ui(

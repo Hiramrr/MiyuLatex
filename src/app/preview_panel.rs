@@ -373,7 +373,7 @@ impl App {
             .min_size(150.0)
             .max_size((ui.available_height() - 100.0).max(150.0))
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     if ui
                         .selectable_label(!self.developer.selected && !self.log, "Problemas")
                         .clicked()
