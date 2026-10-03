@@ -120,14 +120,14 @@ impl App {
         self.activate(active);
     }
     pub(super) fn search_project(&mut self) {
-        self.search_results.clear();
-        if self.project_query.is_empty() {
+        self.search.results.clear();
+        if self.search.query.is_empty() {
             return;
         }
-        let pattern = if self.project_query.chars().any(char::is_uppercase) {
-            regex::escape(&self.project_query)
+        let pattern = if self.search.query.chars().any(char::is_uppercase) {
+            regex::escape(&self.search.query)
         } else {
-            format!("(?i){}", regex::escape(&self.project_query))
+            format!("(?i){}", regex::escape(&self.search.query))
         };
         let re = regex::Regex::new(&pattern).unwrap();
         for path in &self.files {
@@ -145,14 +145,14 @@ impl App {
                 .unwrap_or_default();
             for (row, line) in text.lines().enumerate() {
                 if let Some(found) = re.find(line) {
-                    self.search_results.push(Target {
+                    self.search.results.push(Target {
                         path: path.clone(),
                         row,
                         col: line[..found.start()].chars().count(),
                         label: line.trim().into(),
                         detail: String::new(),
                     });
-                    if self.search_results.len() >= 500 {
+                    if self.search.results.len() >= 500 {
                         return;
                     }
                 }

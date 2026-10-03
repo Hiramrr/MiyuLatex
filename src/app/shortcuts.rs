@@ -10,7 +10,7 @@ impl App {
         let cmd = Modifiers::COMMAND;
         // Los atajos con Mayús van antes: sin ella coinciden también los simples.
         if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::F) {
-            self.project_search = true;
+            self.search.open = true;
             self.search_project();
         }
         if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::O) {

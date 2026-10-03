@@ -2,6 +2,15 @@
 
 use super::*;
 
+/// Búsqueda en todo el proyecto; la consulta se conserva entre aperturas.
+#[derive(Default)]
+pub(in crate::app) struct ProjectSearch {
+    pub(in crate::app) open: bool,
+    pub(in crate::app) query: String,
+    /// Hasta 500 líneas que coinciden con la consulta.
+    pub(in crate::app) results: Vec<Target>,
+}
+
 /// Versiones anteriores de un archivo; solo existe con la ventana abierta.
 pub(in crate::app) struct History {
     file: PathBuf,
@@ -30,7 +39,7 @@ impl History {
 
 impl App {
     pub(super) fn project_search_dialog(&mut self, ctx: &egui::Context) {
-        if self.project_search {
+        if self.search.open {
             let mut open = true;
             let mut jump = None;
             egui::Window::new("Buscar en el proyecto")
@@ -38,7 +47,7 @@ impl App {
                 .default_size([700.0, 440.0])
                 .show(ctx, |ui| {
                     let response = ui.add(
-                        TextEdit::singleline(&mut self.project_query)
+                        TextEdit::singleline(&mut self.search.query)
                             .hint_text("Texto que buscar")
                             .desired_width(f32::INFINITY),
                     );
@@ -47,10 +56,10 @@ impl App {
                     }
                     ui.label(format!(
                         "{} líneas encontradas. Se muestran hasta 500.",
-                        self.search_results.len()
+                        self.search.results.len()
                     ));
                     ScrollArea::vertical().show(ui, |ui| {
-                        for target in &self.search_results {
+                        for target in &self.search.results {
                             let path = target
                                 .path
                                 .strip_prefix(&self.project)
@@ -69,10 +78,10 @@ impl App {
                         }
                     });
                 });
-            self.project_search = open;
+            self.search.open = open;
             if let Some(target) = jump {
                 self.jump(&target);
-                self.project_search = false;
+                self.search.open = false;
             }
         }
     }

@@ -7,7 +7,7 @@ mod project;
 mod settings;
 
 pub(super) use insert::Table;
-pub(super) use project::History;
+pub(super) use project::{History, ProjectSearch};
 
 impl App {
     pub(super) fn dialogs(&mut self, ctx: &egui::Context) {

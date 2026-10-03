@@ -461,10 +461,10 @@ fn buttons_keep_their_purpose_across_documents() {
     app.editor_mut().goto(0, 0);
     app.editor_mut().insert("pendiente ");
     app.changed_editor();
-    app.project_query = "pendiente".into();
+    app.search.query = "pendiente".into();
     app.search_project();
-    assert_eq!(app.search_results.len(), 1);
-    assert_eq!(app.search_results[0].path, md);
+    assert_eq!(app.search.results.len(), 1);
+    assert_eq!(app.search.results[0].path, md);
     click(&mut app, &ctx, "Editar");
     click(&mut app, &ctx, "Buscar y reemplazar…");
     app.query = "casa".into();
@@ -484,9 +484,9 @@ fn buttons_keep_their_purpose_across_documents() {
     app.open(&code).unwrap();
     app.editor_mut().goto(0, 0);
     app.editor_mut().insert("// pendiente\n");
-    app.project_query = "pendiente".into();
+    app.search.query = "pendiente".into();
     app.search_project();
-    assert_eq!(app.search_results.len(), 2);
+    assert_eq!(app.search.results.len(), 2);
 
     // Stopping a compile remains available from a code tab.
     let (_sender, receiver) = mpsc::channel();

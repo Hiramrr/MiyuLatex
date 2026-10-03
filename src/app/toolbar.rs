@@ -117,7 +117,7 @@ impl App {
                         ui.close();
                     }
                     if action(ui, "Buscar en el proyecto…", !self.files.is_empty(), "Busca texto en los archivos del proyecto, incluidos los cambios abiertos sin guardar. Cmd/Ctrl+Mayús+F.").clicked() {
-                        self.project_search = true;
+                        self.search.open = true;
                         self.search_project();
                         ui.close();
                     }
