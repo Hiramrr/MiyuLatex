@@ -60,7 +60,11 @@ pub fn marks(base: &str, current: &str) -> Vec<(usize, Mark)> {
     let close = |row: usize, removed: &mut usize, added: &mut usize, marks: &mut Vec<_>| {
         // Las líneas nuevas que sustituyen a otras cuentan como modificadas.
         for i in 0..*added {
-            let mark = if i < *removed { Mark::Modified } else { Mark::Added };
+            let mark = if i < *removed {
+                Mark::Modified
+            } else {
+                Mark::Added
+            };
             marks.push((row - *added + i, mark));
         }
         if *added == 0 && *removed > 0 {
@@ -93,7 +97,10 @@ mod tests {
     #[test]
     fn marks_added_modified_and_removed_lines() {
         assert_eq!(marks("a\nb\nc", "a\nb\nc"), []);
-        assert_eq!(marks("a\nb\nc", "a\nX\nc\nd\ne"), [(1, Modified), (3, Added), (4, Added)]);
+        assert_eq!(
+            marks("a\nb\nc", "a\nX\nc\nd\ne"),
+            [(1, Modified), (3, Added), (4, Added)]
+        );
         assert_eq!(marks("a\nb\nc\nd", "a\nd"), [(1, Removed)]);
         assert_eq!(marks("a\nb", "a\nX\nY"), [(1, Modified), (2, Added)]);
         assert_eq!(marks("a\nb", "a"), [(1, Removed)]);
@@ -120,7 +127,11 @@ mod tests {
                 .args(arguments)
                 .output()
                 .unwrap();
-            assert!(done.status.success(), "{}", String::from_utf8_lossy(&done.stderr));
+            assert!(
+                done.status.success(),
+                "{}",
+                String::from_utf8_lossy(&done.stderr)
+            );
         };
         run(&["init", "-q", "-b", "trabajo"]);
         std::fs::write(folder.join("nuevo.tex"), "x").unwrap();

@@ -69,11 +69,21 @@ mod tests {
     fn aligns_changed_lines() {
         assert_eq!(
             lines("a\nb\nc\nd", "a\nx\nc\nd\ne"),
-            [(Same, "a"), (Removed, "b"), (Added, "x"), (Same, "c"), (Same, "d"), (Added, "e")]
+            [
+                (Same, "a"),
+                (Removed, "b"),
+                (Added, "x"),
+                (Same, "c"),
+                (Same, "d"),
+                (Added, "e")
+            ]
         );
         assert_eq!(lines("a\nb", "a\nb"), [(Same, "a"), (Same, "b")]);
         assert_eq!(lines("", "a"), [(Added, "a")]);
-        assert_eq!(lines("a\nb\nc", "c"), [(Removed, "a"), (Removed, "b"), (Same, "c")]);
+        assert_eq!(
+            lines("a\nb\nc", "c"),
+            [(Removed, "a"), (Removed, "b"), (Same, "c")]
+        );
         // Una línea repetida no confunde el principio con el final.
         assert_eq!(lines("a\na", "a"), [(Same, "a"), (Removed, "a")]);
     }

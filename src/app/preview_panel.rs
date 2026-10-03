@@ -145,10 +145,24 @@ impl App {
                 step = Some(ui.input(|i| i.modifiers.shift));
             }
             let (current, total) = self.pdf().found();
-            if action(ui, "Anterior", total > 0, "Va a la coincidencia anterior del PDF. Mayús+Enter. Requiere coincidencias.").clicked() {
+            if action(
+                ui,
+                "Anterior",
+                total > 0,
+                "Va a la coincidencia anterior del PDF. Mayús+Enter. Requiere coincidencias.",
+            )
+            .clicked()
+            {
                 step = Some(true);
             }
-            if action(ui, "Siguiente", total > 0, "Va a la coincidencia siguiente del PDF. Enter. Requiere coincidencias.").clicked() {
+            if action(
+                ui,
+                "Siguiente",
+                total > 0,
+                "Va a la coincidencia siguiente del PDF. Enter. Requiere coincidencias.",
+            )
+            .clicked()
+            {
                 step = Some(false);
             }
             if let Some(backwards) = step {
@@ -157,9 +171,9 @@ impl App {
             if !query.is_empty() {
                 match current {
                     _ if total == 0 && self.pdf().reading() => ui.label("Leyendo el texto…"),
-                    _ if total == 0 => ui.label(
-                        RichText::new("Sin coincidencias").color(col(self.theme.error)),
-                    ),
+                    _ if total == 0 => {
+                        ui.label(RichText::new("Sin coincidencias").color(col(self.theme.error)))
+                    }
                     Some(current) => ui.label(format!("{current} de {total}")),
                     None => ui.label(format!("{total} coincidencias")),
                 };
@@ -294,7 +308,8 @@ impl App {
                                     )
                                     .clicked()
                                 {
-                                    jump = Some((Self::problem_path(result, problem), problem.line));
+                                    jump =
+                                        Some((Self::problem_path(result, problem), problem.line));
                                 }
                             }
                         }

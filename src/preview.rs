@@ -7,8 +7,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use eframe::egui::{self, Color32, ColorImage, TextureHandle, TextureOptions};
 use crate::pdftext::{self, PageText};
+use eframe::egui::{self, Color32, ColorImage, TextureHandle, TextureOptions};
 use hayro::{
     RenderCache, RenderSettings,
     hayro_interpret::{InterpreterCache, InterpreterSettings},
@@ -520,8 +520,7 @@ impl Preview {
             .id_salt(id)
             .auto_shrink([false, false])
             .show_viewport(ui, |ui, viewport| {
-                let (area, response) =
-                    ui.allocate_exact_size(total, egui::Sense::click_and_drag());
+                let (area, response) = ui.allocate_exact_size(total, egui::Sense::click_and_drag());
                 let sizes = &self.sizes;
                 let page_rect = |page: usize| {
                     let size = egui::vec2(sizes[page].0, sizes[page].1) * scale;
@@ -605,7 +604,11 @@ impl Preview {
                     && page < sizes.len()
                 {
                     for bounds in text.rects(anchor.min(head), anchor.max(head) + 1) {
-                        painter.rect_filled(on_screen(page, bounds), 0.0, accent.gamma_multiply(0.35));
+                        painter.rect_filled(
+                            on_screen(page, bounds),
+                            0.0,
+                            accent.gamma_multiply(0.35),
+                        );
                     }
                 }
                 // Carácter de una página más cercano a un punto de la pantalla.
@@ -663,7 +666,8 @@ impl Preview {
                 });
                 let mut target = self.target.take().filter(|p| *p < sizes.len());
                 if std::mem::take(&mut self.reveal)
-                    && let Some(&(page, start, end)) = self.current.and_then(|i| self.matches.get(i))
+                    && let Some(&(page, start, end)) =
+                        self.current.and_then(|i| self.matches.get(i))
                     && let Some(bounds) = self
                         .texts
                         .get(&page)

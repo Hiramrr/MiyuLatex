@@ -296,39 +296,37 @@ pub enum Reference {
 /// Referencia, cita o archivo del comando que rodea la columna `col` de `line`.
 pub fn reference_at(line: &str, col: usize) -> Option<Reference> {
     let at = crate::editor::byte_col(line, col);
-    regex(COMMAND)
-        .captures_iter(line)
-        .find_map(|m| {
-            let keys = m.get(2).unwrap();
-            if !(keys.start()..=keys.end()).contains(&at) {
-                return None;
-            }
-            // Con varias claves separadas por comas, la que está bajo el cursor.
-            let mut start = keys.start();
-            let key = keys
-                .as_str()
-                .split(',')
-                .find(|key| {
-                    let end = start + key.len();
-                    let found = at <= end;
-                    start = end + 1;
-                    found
-                })?
-                .trim();
-            if key.is_empty() {
-                return None;
-            }
-            let command = m[1].to_lowercase();
-            Some(match command.as_str() {
-                "input" | "include" | "subfile" => Reference::File(key.into(), &["tex"]),
-                "bibliography" | "addbibresource" => Reference::File(key.into(), &["bib"]),
-                "includegraphics" => Reference::File(key.into(), &["pdf", "png", "jpg", "jpeg"]),
-                _ if command.contains("cite") => Reference::Citation(key.into()),
-                "label" => Reference::Label(key.into()),
-                _ if command.ends_with("ref") => Reference::Label(key.into()),
-                _ => return None,
-            })
+    regex(COMMAND).captures_iter(line).find_map(|m| {
+        let keys = m.get(2).unwrap();
+        if !(keys.start()..=keys.end()).contains(&at) {
+            return None;
+        }
+        // Con varias claves separadas por comas, la que está bajo el cursor.
+        let mut start = keys.start();
+        let key = keys
+            .as_str()
+            .split(',')
+            .find(|key| {
+                let end = start + key.len();
+                let found = at <= end;
+                start = end + 1;
+                found
+            })?
+            .trim();
+        if key.is_empty() {
+            return None;
+        }
+        let command = m[1].to_lowercase();
+        Some(match command.as_str() {
+            "input" | "include" | "subfile" => Reference::File(key.into(), &["tex"]),
+            "bibliography" | "addbibresource" => Reference::File(key.into(), &["bib"]),
+            "includegraphics" => Reference::File(key.into(), &["pdf", "png", "jpg", "jpeg"]),
+            _ if command.contains("cite") => Reference::Citation(key.into()),
+            "label" => Reference::Label(key.into()),
+            _ if command.ends_with("ref") => Reference::Label(key.into()),
+            _ => return None,
         })
+    })
 }
 
 /// `text` con la etiqueta `old` cambiada por `new` en su `\label` y en los
@@ -618,7 +616,10 @@ mod tests {
         assert_eq!(at("eq:uno"), Some(Reference::Label("eq:uno".into())));
         assert_eq!(at("knuth"), Some(Reference::Citation("knuth".into())));
         assert_eq!(at("lamport"), Some(Reference::Citation("lamport".into())));
-        assert_eq!(at("cap/dos"), Some(Reference::File("cap/dos".into(), &["tex"])));
+        assert_eq!(
+            at("cap/dos"),
+            Some(Reference::File("cap/dos".into(), &["tex"]))
+        );
         assert_eq!(at("Ver"), None);
         assert_eq!(at("p.~3"), None);
         // Las columnas cuentan caracteres, no bytes.
@@ -635,7 +636,8 @@ mod tests {
 
     #[test]
     fn renames_a_label_and_its_references() {
-        let text = "ñ \\label{a} \\ref{a} \\cref{b, a,ab} % ñ \\ref{a}\r\n\\eqref{ab} \\cite{a} \\ref {a}";
+        let text =
+            "ñ \\label{a} \\ref{a} \\cref{b, a,ab} % ñ \\ref{a}\r\n\\eqref{ab} \\cite{a} \\ref {a}";
         let (renamed, count) = rename_label(text, "a", "sec:año");
         assert_eq!(count, 4);
         assert_eq!(
@@ -698,7 +700,10 @@ mod tests {
 
     #[test]
     fn words_positions_and_less_common_commands() {
-        let source = |path: &str, text: &str| Source { path: path.into(), text: text.into() };
+        let source = |path: &str, text: &str| Source {
+            path: path.into(),
+            text: text.into(),
+        };
         let document = source(
             "main.tex",
             "\\documentclass{article}\n\\title{Sin contar}\n\\begin{document}\nHola mundo, l'été. % comentario aquí\n\\section{Introducción} texto con $x + y$ fórmula \\cite{a} y \\ref{b}.\n\\begin{verbatim}\nno cuenta\n\\end{verbatim}\n\\end{document}",
@@ -706,19 +711,34 @@ mod tests {
         let bib = source("refs.bib", "@book{a, title = {Muchas palabras aquí}}");
         assert_eq!(estimated_words(&[document, bib]), 8);
 
-        let labels = labels(&[source("a.tex", "a\n  \\label{uno} \\label{dos}\n\\label{tres}")]);
+        let labels = labels(&[source(
+            "a.tex",
+            "a\n  \\label{uno} \\label{dos}\n\\label{tres}",
+        )]);
         assert_eq!(
-            labels.iter().map(|t| (t.label.as_str(), t.row, t.col)).collect::<Vec<_>>(),
+            labels
+                .iter()
+                .map(|t| (t.label.as_str(), t.row, t.col))
+                .collect::<Vec<_>>(),
             [("uno", 1, 2), ("dos", 1, 14), ("tres", 2, 0)]
         );
 
-        let items = citations(&[source("b.tex", "Texto\n\\bibitem[Pérez]{perez2020} Algo\n\\bibitem{otro}")]);
+        let items = citations(&[source(
+            "b.tex",
+            "Texto\n\\bibitem[Pérez]{perez2020} Algo\n\\bibitem{otro}",
+        )]);
         assert_eq!(
-            items.iter().map(|t| (t.label.as_str(), t.row)).collect::<Vec<_>>(),
+            items
+                .iter()
+                .map(|t| (t.label.as_str(), t.row))
+                .collect::<Vec<_>>(),
             [("perez2020", 1), ("otro", 2)]
         );
 
-        assert_eq!(table(0, 0, 'x'), "\\begin{tabular}{l}\n\\hline\n$0 \\\\\n\\hline\n\\hline\n\\end{tabular}");
+        assert_eq!(
+            table(0, 0, 'x'),
+            "\\begin{tabular}{l}\n\\hline\n$0 \\\\\n\\hline\n\\hline\n\\end{tabular}"
+        );
 
         let dir = std::env::temp_dir().join(format!("miyu-input-{}", std::process::id()));
         fs::create_dir_all(dir.join("cap")).unwrap();
@@ -728,8 +748,19 @@ mod tests {
             fs::write(dir.join(name), "").unwrap();
         }
         let found = sources(&root, &[]);
-        let names: Vec<_> = found.iter().map(|s| s.path.strip_prefix(dir.canonicalize().unwrap()).unwrap().to_owned()).collect();
-        assert_eq!(names, ["main.tex", "cap/dos.tex", "uno.bib", "cap/tres.bib"].map(PathBuf::from));
+        let names: Vec<_> = found
+            .iter()
+            .map(|s| {
+                s.path
+                    .strip_prefix(dir.canonicalize().unwrap())
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect();
+        assert_eq!(
+            names,
+            ["main.tex", "cap/dos.tex", "uno.bib", "cap/tres.bib"].map(PathBuf::from)
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 }

@@ -10,13 +10,34 @@ use crate::{
 
 /// Campos que BibTeX exige a cada tipo; las alternativas van separadas por `|`.
 const REQUIRED: &[(&str, &[&str])] = &[
-    ("article", &["author", "title", "journal|journaltitle", "year|date"]),
-    ("book", &["author|editor", "title", "publisher", "year|date"]),
-    ("inproceedings", &["author", "title", "booktitle", "year|date"]),
-    ("incollection", &["author", "title", "booktitle", "year|date"]),
-    ("phdthesis", &["author", "title", "school|institution", "year|date"]),
-    ("mastersthesis", &["author", "title", "school|institution", "year|date"]),
-    ("techreport", &["author", "title", "institution", "year|date"]),
+    (
+        "article",
+        &["author", "title", "journal|journaltitle", "year|date"],
+    ),
+    (
+        "book",
+        &["author|editor", "title", "publisher", "year|date"],
+    ),
+    (
+        "inproceedings",
+        &["author", "title", "booktitle", "year|date"],
+    ),
+    (
+        "incollection",
+        &["author", "title", "booktitle", "year|date"],
+    ),
+    (
+        "phdthesis",
+        &["author", "title", "school|institution", "year|date"],
+    ),
+    (
+        "mastersthesis",
+        &["author", "title", "school|institution", "year|date"],
+    ),
+    (
+        "techreport",
+        &["author", "title", "institution", "year|date"],
+    ),
 ];
 
 fn is_bib(source: &Source) -> bool {
@@ -60,7 +81,9 @@ pub fn problems(sources: &[Source]) -> Vec<Target> {
                 found.push(Target {
                     path: source.path.clone(),
                     row: text[..start].matches('\n').count()
-                        + text[start..entry.get(1).unwrap().start()].matches('\n').count(),
+                        + text[start..entry.get(1).unwrap().start()]
+                            .matches('\n')
+                            .count(),
                     col: 0,
                     label: message,
                     detail: key.to_string(),
@@ -121,7 +144,11 @@ pub fn key(entry: &str) -> Option<String> {
 pub fn tidy(entry: &str) -> String {
     let entry = entry.trim();
     if entry.contains('\n') {
-        return entry.lines().map(str::trim_end).collect::<Vec<_>>().join("\n");
+        return entry
+            .lines()
+            .map(str::trim_end)
+            .collect::<Vec<_>>()
+            .join("\n");
     }
     let body = entry.strip_suffix('}').unwrap_or(entry).trim_end();
     let mut out = String::with_capacity(entry.len() + 32);
@@ -198,7 +225,10 @@ mod tests {
             tidy(line),
             "@article{Backus_1978,\n  title={Can {A}, b},\n  year={1978},\n  month=Aug\n}"
         );
-        assert_eq!(tidy("@misc{a,\n  title={T}, \n}\n"), "@misc{a,\n  title={T},\n}");
+        assert_eq!(
+            tidy("@misc{a,\n  title={T}, \n}\n"),
+            "@misc{a,\n  title={T},\n}"
+        );
         assert_eq!(key("<html>"), None);
     }
 }

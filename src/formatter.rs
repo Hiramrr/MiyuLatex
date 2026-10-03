@@ -12,7 +12,11 @@ use crate::compiler;
 /// Programa y argumentos que formatean lo que reciben por la entrada
 /// estándar, según la extensión del archivo. `{}` es el nombre del archivo.
 const TOOLS: &[(&[&str], &str, &[&str])] = &[
-    (&["rs"], "rustfmt", &["--edition", "2024", "--emit", "stdout"]),
+    (
+        &["rs"],
+        "rustfmt",
+        &["--edition", "2024", "--emit", "stdout"],
+    ),
     (&["go"], "gofmt", &[]),
     (&["py"], "ruff", &["format", "--stdin-filename", "{}", "-"]),
     (
@@ -21,7 +25,9 @@ const TOOLS: &[(&[&str], &str, &[&str])] = &[
         &["--assume-filename", "{}"],
     ),
     (
-        &["js", "jsx", "ts", "tsx", "json", "css", "scss", "html", "md", "yaml", "yml"],
+        &[
+            "js", "jsx", "ts", "tsx", "json", "css", "scss", "html", "md", "yaml", "yml",
+        ],
         "prettier",
         &["--stdin-filepath", "{}"],
     ),
@@ -48,8 +54,9 @@ pub fn format(name: &Path, text: &str) -> Result<String, String> {
         .iter()
         .find(|(extensions, ..)| extensions.contains(&extension.as_str()))
         .ok_or("No conozco un formateador para este tipo de archivo")?;
-    let executable = compiler::which(program)
-        .ok_or(format!("Instala {program} para formatear archivos .{extension}"))?;
+    let executable = compiler::which(program).ok_or(format!(
+        "Instala {program} para formatear archivos .{extension}"
+    ))?;
     let mut command = Command::new(executable);
     // latexindent no lee la entrada estándar: trabaja sobre una copia.
     let copy = (*program == "latexindent").then(|| {

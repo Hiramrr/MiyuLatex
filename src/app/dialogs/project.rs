@@ -26,8 +26,19 @@ pub(in crate::app) struct History {
 
 impl History {
     pub(in crate::app) fn new(file: PathBuf) -> (Self, Result<(), String>) {
-        let mut history = Self { versions: latex::versions(&file), file, index: 0, text: None, side_by_side: false, changes: Default::default() };
-        let read = if history.versions.is_empty() { Ok(()) } else { history.select(0) };
+        let mut history = Self {
+            versions: latex::versions(&file),
+            file,
+            index: 0,
+            text: None,
+            side_by_side: false,
+            changes: Default::default(),
+        };
+        let read = if history.versions.is_empty() {
+            Ok(())
+        } else {
+            history.select(0)
+        };
         (history, read)
     }
 
@@ -53,7 +64,9 @@ fn changes(old: &str, new: &str, theme: &Theme, size: f32) -> LayoutJob {
     let lines = crate::diff::lines(old, new);
     let near = |i: usize| {
         let range = i.saturating_sub(3)..(i + 4).min(lines.len());
-        lines[range].iter().any(|(change, _)| *change != crate::diff::Change::Same)
+        lines[range]
+            .iter()
+            .any(|(change, _)| *change != crate::diff::Change::Same)
     };
     let mut job = LayoutJob::default();
     let mut skipped = false;
@@ -109,7 +122,11 @@ impl App {
     }
     /// Cambia la etiqueta en los documentos abiertos, que quedan sin guardar,
     /// y en el resto de los archivos del proyecto, que se reescriben.
-    pub(in crate::app) fn apply_rename_label(&mut self, old: &str, new: &str) -> Result<(), String> {
+    pub(in crate::app) fn apply_rename_label(
+        &mut self,
+        old: &str,
+        new: &str,
+    ) -> Result<(), String> {
         if new.is_empty() || new.contains(['{', '}', '\\', '%', '#', ',', ' ']) {
             return Err("Una etiqueta no admite espacios, comas, llaves, \\, % ni #".into());
         }
@@ -141,7 +158,8 @@ impl App {
             if let Some((_, doc)) = open {
                 let cursor = doc.editor.cursor;
                 let end = doc.editor.end();
-                doc.editor.replace(crate::editor::Pos::new(0, 0), end, &text);
+                doc.editor
+                    .replace(crate::editor::Pos::new(0, 0), end, &text);
                 doc.editor.goto(cursor.row, cursor.col);
             } else {
                 // La versión anterior queda en el historial del archivo.

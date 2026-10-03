@@ -28,13 +28,23 @@ impl App {
             .default_width(560.0)
             .show(ctx, |ui| {
                 if report.is_empty() {
-                    ui.label("No encontré claves repetidas, campos que falten ni entradas sin citar.");
+                    ui.label(
+                        "No encontré claves repetidas, campos que falten ni entradas sin citar.",
+                    );
                 }
                 ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
                     for problem in report {
-                        let file = problem.path.file_name().unwrap_or_default().to_string_lossy();
+                        let file = problem
+                            .path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy();
                         let text = format!("{file}:{} · {}", problem.row + 1, problem.label);
-                        if ui.button(text).on_hover_text("Abre la entrada en el editor.").clicked() {
+                        if ui
+                            .button(text)
+                            .on_hover_text("Abre la entrada en el editor.")
+                            .clicked()
+                        {
                             jump = Some(problem.clone());
                         }
                     }
@@ -51,7 +61,11 @@ impl App {
         self.citation.open = true;
         self.citation.focus = true;
         self.citation.insert = self.editor().format == Format::Latex
-            && self.editor().path.as_ref().is_none_or(|p| p.extension().is_none_or(|e| e != "bib"));
+            && self
+                .editor()
+                .path
+                .as_ref()
+                .is_none_or(|p| p.extension().is_none_or(|e| e != "bib"));
     }
     /// Archivo `.bib` del proyecto al que se añaden las citas nuevas.
     fn bibliography(&self) -> Option<PathBuf> {
@@ -125,7 +139,9 @@ impl App {
             let entry = compiler::utility(command)
                 .map_err(|e| format!("No pude descargar la cita: {e}"))?;
             if crate::bib::key(&entry).is_none() {
-                return Err("La respuesta no es una entrada BibTeX; revisa el identificador".into());
+                return Err(
+                    "La respuesta no es una entrada BibTeX; revisa el identificador".into(),
+                );
             }
             Ok(ToolResult::Citation(crate::bib::tidy(&entry)))
         });
@@ -168,8 +184,15 @@ impl App {
                     .map_err(|e| format!("No pude escribir {}: {e}", path.display()))?;
             }
         }
-        let file = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
-        if self.citation.insert && self.editor().format == Format::Latex && self.editor().path.as_ref() != Some(&path) {
+        let file = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        if self.citation.insert
+            && self.editor().format == Format::Latex
+            && self.editor().path.as_ref() != Some(&path)
+        {
             self.insert_snippet(&format!("\\cite{{{key}}}"));
         }
         self.refresh_sources();

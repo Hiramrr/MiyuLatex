@@ -12,7 +12,12 @@ pub(in crate::app) struct Table {
 
 impl Default for Table {
     fn default() -> Self {
-        Self { open: false, rows: 3, columns: 3, alignment: 'l' }
+        Self {
+            open: false,
+            rows: 3,
+            columns: 3,
+            alignment: 'l',
+        }
     }
 }
 

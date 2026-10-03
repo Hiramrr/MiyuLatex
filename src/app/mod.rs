@@ -158,7 +158,6 @@ pub struct App {
     mascot: crate::mascot::Mascot,
 }
 
-
 impl App {
     pub fn new(target: Option<PathBuf>, ctx: &egui::Context) -> Result<Self, String> {
         egui_extras::install_image_loaders(ctx);
@@ -448,7 +447,6 @@ fn action(ui: &mut egui::Ui, label: &str, enabled: bool, help: &str) -> egui::Re
         .on_hover_text(help)
         .on_disabled_hover_text(help)
 }
-
 
 /// Panel lateral en el lado elegido en Ver. Si los dos comparten lado, el de
 /// archivos queda en el borde de la ventana porque se dibuja primero.

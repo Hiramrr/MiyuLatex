@@ -231,7 +231,12 @@ const JASMINE_OPEN: Bush = [
 ];
 /// Filas de arriba que se mecen; las de abajo siguen unidas a la maceta.
 const JASMINE_SWAYS: usize = 5;
-const JASMINE_POT: [&str; 4] = ["..########..", "...######...", "...######...", "....####...."];
+const JASMINE_POT: [&str; 4] = [
+    "..########..",
+    "...######...",
+    "...######...",
+    "....####....",
+];
 /// Una nota del perfume, que sube desde las flores.
 const SCENT: [&str; 1] = ["*"];
 /// Segundos que siguen abiertas las flores tras una compilación correcta o un clic.
@@ -588,10 +593,17 @@ impl Mascot {
         let asleep = self.pose == Pose::Sleep;
         // El jazmín va detrás de todos: el gatito y sus amigos pasan por delante.
         if company[2] {
-            let size = vec2(JASMINE_BUDS[0].len() as f32, (JASMINE_BUDS.len() + JASMINE_POT.len()) as f32) * pixel;
+            let size = vec2(
+                JASMINE_BUDS[0].len() as f32,
+                (JASMINE_BUDS.len() + JASMINE_POT.len()) as f32,
+            ) * pixel;
             let origin = pos2(snap(screen.left() + MARGIN), snap(floor) - size.y);
             let response = ui
-                .interact(Rect::from_min_size(origin, size), Id::new("jazmín de la mascota"), Sense::click())
+                .interact(
+                    Rect::from_min_size(origin, size),
+                    Id::new("jazmín de la mascota"),
+                    Sense::click(),
+                )
                 .on_hover_text("Clic derecho para ocultarlo");
             if response.clicked() {
                 self.bloomed = now;
@@ -609,13 +621,53 @@ impl Mascot {
             // Una racha de brisa cada pocos segundos mece las ramas.
             let sway = if frame(2.0) % 9 == 0 { 1 } else { 0 };
             let branches: &[&str] = if open { &JASMINE_OPEN } else { &JASMINE_BUDS };
-            paint(painter, origin, pixel, &branches[..JASMINE_SWAYS], (sway, 0), false, &ink);
-            paint(painter, origin, pixel, &branches[JASMINE_SWAYS..], (0, JASMINE_SWAYS as i32), false, &ink);
-            paint(painter, origin, pixel, &JASMINE_POT, (0, JASMINE_BUDS.len() as i32), false, &ink);
+            paint(
+                painter,
+                origin,
+                pixel,
+                &branches[..JASMINE_SWAYS],
+                (sway, 0),
+                false,
+                &ink,
+            );
+            paint(
+                painter,
+                origin,
+                pixel,
+                &branches[JASMINE_SWAYS..],
+                (0, JASMINE_SWAYS as i32),
+                false,
+                &ink,
+            );
+            paint(
+                painter,
+                origin,
+                pixel,
+                &JASMINE_POT,
+                (0, JASMINE_BUDS.len() as i32),
+                false,
+                &ink,
+            );
             if asleep {
                 let rise = (frame(2.0) % 4) as i32;
-                paint(painter, origin, pixel, &SCENT, (2 + rise % 2, -1 - 2 * rise), false, &ink);
-                paint(painter, origin, pixel, &SCENT, (8 - rise % 2, -2 * ((rise + 2) % 4)), false, &ink);
+                paint(
+                    painter,
+                    origin,
+                    pixel,
+                    &SCENT,
+                    (2 + rise % 2, -1 - 2 * rise),
+                    false,
+                    &ink,
+                );
+                paint(
+                    painter,
+                    origin,
+                    pixel,
+                    &SCENT,
+                    (8 - rise % 2, -2 * ((rise + 2) % 4)),
+                    false,
+                    &ink,
+                );
             }
             if open && !asleep && now - self.bloomed < BLOOM_TIME {
                 // Que se cierre a su hora aunque no haya más eventos.
@@ -863,7 +915,11 @@ mod tests {
             assert!(sprite.iter().all(|line| line.len() == CRAB[0].len()));
         }
         let jasmine = JASMINE_BUDS.iter().chain(&JASMINE_OPEN).chain(&JASMINE_POT);
-        assert!(jasmine.into_iter().all(|line| line.len() == JASMINE_BUDS[0].len()));
+        assert!(
+            jasmine
+                .into_iter()
+                .all(|line| line.len() == JASMINE_BUDS[0].len())
+        );
     }
 
     #[test]
@@ -981,7 +1037,12 @@ mod tests {
             output.shapes.len()
         };
         let alone = count([false; 3]);
-        let each = [[true, false, false], [false, true, false], [false, false, true]].map(count);
+        let each = [
+            [true, false, false],
+            [false, true, false],
+            [false, false, true],
+        ]
+        .map(count);
         assert!(each.iter().all(|&n| n > alone));
         let extra: usize = each.iter().map(|n| n - alone).sum();
         assert_eq!(count([true; 3]) - alone, extra);
@@ -994,7 +1055,10 @@ mod tests {
         let (leaf, accent) = (col(theme.success), col(theme.accent));
         let mut cat = Mascot::default();
         let frame = |cat: &mut Mascot, time: f64, busy: bool, ok: bool, jasmine: bool| {
-            let input = egui::RawInput { time: Some(time), ..Default::default() };
+            let input = egui::RawInput {
+                time: Some(time),
+                ..Default::default()
+            };
             let mut output = ctx.run_ui(input, |ui| {
                 cat.show(ui, 500.0, &theme, busy, ok, &mut [false, false, jasmine]);
             });
@@ -1017,7 +1081,9 @@ mod tests {
         assert!(frame(&mut cat, 2.1, false, true, true).contains(&accent));
         assert!(!frame(&mut cat, 2.2 + BLOOM_TIME, false, true, true).contains(&accent));
         // De noche, mientras el gatito duerme, vuelven a abrirse.
-        assert!(frame(&mut cat, 3.0 + SLEEP_AFTER + BLOOM_TIME, false, true, true).contains(&accent));
+        assert!(
+            frame(&mut cat, 3.0 + SLEEP_AFTER + BLOOM_TIME, false, true, true).contains(&accent)
+        );
         assert_eq!(cat.pose, Pose::Sleep);
     }
 

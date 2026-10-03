@@ -750,7 +750,11 @@ fn definition_problems_and_command_palette() {
     )
     .unwrap();
     fs::write(&chapter, "Texto\n  \\section{Uno}\\label{sec:uno}\n").unwrap();
-    fs::write(&bib, "@book{otro,\n title = {A}\n}\n@book{knuth,\n title = {B}\n}\n").unwrap();
+    fs::write(
+        &bib,
+        "@book{otro,\n title = {A}\n}\n@book{knuth,\n title = {B}\n}\n",
+    )
+    .unwrap();
     let ctx = egui::Context::default();
     let mut app = App::new(Some(main.clone()), &ctx).unwrap();
     app.backdrop = Backdrop::default();
@@ -836,7 +840,11 @@ fn renames_labels_and_inserts_dropped_images() {
         "\\documentclass{article}\n\\begin{document}\n\\input{cap/uno}\nVer \\ref{sec:uno} y \\ref{otra}.\n\\label{otra}\n\\end{document}\n",
     )
     .unwrap();
-    fs::write(&chapter, "\\section{Uno}\\label{sec:uno}\n\\eqref{sec:uno}\n").unwrap();
+    fs::write(
+        &chapter,
+        "\\section{Uno}\\label{sec:uno}\n\\eqref{sec:uno}\n",
+    )
+    .unwrap();
     let photo = outside.join("mi foto.png");
     image::RgbImage::new(4, 4).save(&photo).unwrap();
     let ctx = egui::Context::default();
@@ -855,13 +863,27 @@ fn renames_labels_and_inserts_dropped_images() {
     // Un nombre que ya existe o con caracteres inválidos se rechaza.
     assert!(app.apply_rename_label("sec:uno", "otra").is_err());
     assert!(app.apply_rename_label("sec:uno", "con espacio").is_err());
-    assert_eq!(fs::read_to_string(&chapter).unwrap().matches("sec:uno").count(), 2);
+    assert_eq!(
+        fs::read_to_string(&chapter)
+            .unwrap()
+            .matches("sec:uno")
+            .count(),
+        2
+    );
     app.apply_rename_label("sec:uno", "sec:primera").unwrap();
     // El documento abierto cambia en el editor y se puede deshacer.
-    assert!(app.editor().text().contains("\\ref{sec:primera} y \\ref{otra}"));
+    assert!(
+        app.editor()
+            .text()
+            .contains("\\ref{sec:primera} y \\ref{otra}")
+    );
     assert!(app.editor().dirty());
     assert_eq!(app.editor().cursor, Pos::new(3, 10));
-    assert!(fs::read_to_string(&main).unwrap().contains("\\ref{sec:uno}"));
+    assert!(
+        fs::read_to_string(&main)
+            .unwrap()
+            .contains("\\ref{sec:uno}")
+    );
     // El archivo cerrado se reescribe y guarda la versión anterior.
     assert_eq!(
         fs::read_to_string(&chapter).unwrap(),
@@ -876,7 +898,11 @@ fn renames_labels_and_inserts_dropped_images() {
     app.editor_mut().goto(4, 12);
     app.insert_image(&photo);
     assert!(folder.join("images/figura-1.png").is_file());
-    assert!(app.editor().text().contains("\\includegraphics[width=0.8\\linewidth]{images/figura-1.png}"));
+    assert!(
+        app.editor()
+            .text()
+            .contains("\\includegraphics[width=0.8\\linewidth]{images/figura-1.png}")
+    );
     assert!(app.message.contains("graphicx"));
     // En Markdown entra como imagen; la que ya está en la carpeta no se copia.
     let notes = folder.join("notas.md");
@@ -937,12 +963,22 @@ fn bibliography_report_and_downloaded_citations() {
     assert!(app.message.contains("Añadida «Backus_1978» a refs.bib"));
     // Repetirla no la duplica.
     app.add_citation(entry).unwrap();
-    assert_eq!(fs::read_to_string(&bib).unwrap().matches("Backus_1978").count(), 1);
+    assert_eq!(
+        fs::read_to_string(&bib)
+            .unwrap()
+            .matches("Backus_1978")
+            .count(),
+        1
+    );
     assert!(app.message.contains("ya estaba"));
     // Con el .bib abierto, la entrada se añade en el editor y queda sin guardar.
     app.open(&bib).unwrap();
     app.add_citation("@misc{otra,\n  title={O}\n}").unwrap();
-    assert!(app.editor().text().ends_with("}\n\n@misc{otra,\n  title={O}\n}\n"));
+    assert!(
+        app.editor()
+            .text()
+            .ends_with("}\n\n@misc{otra,\n  title={O}\n}\n")
+    );
     assert!(app.editor().dirty());
     assert!(!fs::read_to_string(&bib).unwrap().contains("otra"));
     fs::remove_dir_all(folder).unwrap();

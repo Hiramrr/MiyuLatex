@@ -95,13 +95,17 @@ impl App {
                         }
                         Some(doc) => {
                             let (cursor, end) = (doc.editor.cursor, doc.editor.end());
-                            doc.editor.replace(crate::editor::Pos::new(0, 0), end, &text);
+                            doc.editor
+                                .replace(crate::editor::Pos::new(0, 0), end, &text);
                             doc.editor.goto(cursor.row, cursor.col);
                             self.changed_editor();
-                            self.message = "Documento formateado. Puedes deshacer el cambio.".into();
+                            self.message =
+                                "Documento formateado. Puedes deshacer el cambio.".into();
                         }
                         None => {
-                            self.message = "El documento cambió mientras se formateaba; vuelve a intentarlo".into();
+                            self.message =
+                                "El documento cambió mientras se formateaba; vuelve a intentarlo"
+                                    .into();
                         }
                     }
                 }
