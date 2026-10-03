@@ -217,7 +217,21 @@ línea de origen. Miyu lee el `.synctex.gz` que deja la compilación, sin el
 programa `synctex`, así que funciona con Tectonic solo.
 
 Cada guardado deja una versión en `~/.config/miyulatex/history`. Historial del archivo LaTeX, en Archivo, muestra las últimas 100 y restaura
-cualquiera en el editor.
+cualquiera en el editor. La ventana enseña las líneas que cambian entre la
+versión elegida y el texto actual, en rojo las anteriores y en verde las
+nuevas; también puede mostrar las dos versiones completas.
+
+## Bibliografía
+
+Cita por DOI o arXiv, en Insertar, descarga la entrada BibTeX de un DOI
+(`10.1145/359576.359579`) o de un artículo de arXiv (`arXiv:1706.03762`) y la
+añade al primer archivo `.bib` del proyecto. Puede insertar además `\cite` con
+la clave nueva en el cursor. Usa `curl` y consulta doi.org o arxiv.org; no se
+envía nada más que el identificador.
+
+Revisar bibliografía, en LaTeX, lista las claves repetidas, los campos
+obligatorios que faltan en cada entrada y las entradas que ningún documento
+cita. Cada aviso abre la entrada en el editor.
 
 ## Sesión y archivos
 
@@ -329,7 +343,7 @@ miyu --render-background foto.png fondo.png 1280 800 2 1 16131f dither
 `highlight.rs` resalta LaTeX, `syntax.rs` mantiene el resaltado por líneas y
 `layout.rs` maqueta solo las que cambian. `format.rs` detecta formatos y extrae
 el esquema de Markdown, `latex.rs` reúne fuentes, etiquetas, citas, historial y
-ZIP del proyecto, `compiler.rs` compila y lee problemas, `synctex.rs` relaciona
+ZIP del proyecto, `compiler.rs` compila y lee problemas, `bib.rs` revisa la bibliografía, `diff.rs` compara versiones, `synctex.rs` relaciona
 el código con el PDF, `preview.rs` rasteriza y dibuja el PDF, `pdftext.rs` lee su texto, `spell.rs` revisa
 la ortografía, `workspace.rs` lleva la sesión y los archivos, `backdrop.rs` trama la foto, `theme.rs` define
 los temas, `custom.rs` aplica la personalización y `config.rs` guarda

@@ -901,3 +901,49 @@ fn renames_labels_and_inserts_dropped_images() {
     fs::remove_dir_all(folder).unwrap();
     fs::remove_dir_all(outside).unwrap();
 }
+
+#[test]
+fn bibliography_report_and_downloaded_citations() {
+    let folder = std::env::temp_dir().join(format!("miyu-biblio-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let folder = folder.canonicalize().unwrap();
+    let main = folder.join("main.tex");
+    let bib = folder.join("refs.bib");
+    fs::write(&main, "\\documentclass{article}\n\\addbibresource{refs.bib}\n\\begin{document}\n\\cite{uno}\n\n\\end{document}\n").unwrap();
+    fs::write(&bib, "@book{uno,\n  title = {T}\n}\n").unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(main.clone()), &ctx).unwrap();
+    app.backdrop = Backdrop::default();
+    tick(&mut app, &ctx, vec![]);
+    app.check_bibliography();
+    tick(&mut app, &ctx, vec![]);
+    let report = app.bib_report.as_ref().unwrap();
+    assert_eq!(report.len(), 1);
+    assert!(report[0].label.contains("no tiene author, publisher, year"));
+
+    // La entrada va al disco si el .bib está cerrado, con \\cite en el cursor.
+    app.open_citation();
+    assert!(app.citation.insert);
+    tick(&mut app, &ctx, vec![]);
+    app.editor_mut().goto(4, 0);
+    let entry = "@article{Backus_1978,\n  title={T},\n  year={1978}\n}";
+    app.add_citation(entry).unwrap();
+    assert_eq!(
+        fs::read_to_string(&bib).unwrap(),
+        format!("@book{{uno,\n  title = {{T}}\n}}\n\n{entry}\n")
+    );
+    assert_eq!(app.editor().lines[4], "\\cite{Backus_1978}");
+    assert!(!app.citation.open);
+    assert!(app.message.contains("Añadida «Backus_1978» a refs.bib"));
+    // Repetirla no la duplica.
+    app.add_citation(entry).unwrap();
+    assert_eq!(fs::read_to_string(&bib).unwrap().matches("Backus_1978").count(), 1);
+    assert!(app.message.contains("ya estaba"));
+    // Con el .bib abierto, la entrada se añade en el editor y queda sin guardar.
+    app.open(&bib).unwrap();
+    app.add_citation("@misc{otra,\n  title={O}\n}").unwrap();
+    assert!(app.editor().text().ends_with("}\n\n@misc{otra,\n  title={O}\n}\n"));
+    assert!(app.editor().dirty());
+    assert!(!fs::read_to_string(&bib).unwrap().contains("otra"));
+    fs::remove_dir_all(folder).unwrap();
+}

@@ -75,6 +75,8 @@ enum ToolResult {
     Message(String),
     Imported(PathBuf),
     Words(String),
+    /// Entrada BibTeX descargada.
+    Citation(String),
     Forward(usize, f32, f32),
     Back(PathBuf, usize),
 }
@@ -101,6 +103,9 @@ pub struct App {
     search: dialogs::ProjectSearch,
     history: Option<dialogs::History>,
     rename_label: Option<dialogs::RenameLabel>,
+    citation: dialogs::Citation,
+    /// Avisos de la última revisión de la bibliografía, con la ventana abierta.
+    bib_report: Option<Vec<Target>>,
     table: dialogs::Table,
     palette: dialogs::Palette,
     word_count: Option<String>,
@@ -212,6 +217,8 @@ impl App {
             search: dialogs::ProjectSearch::default(),
             history: None,
             rename_label: None,
+            citation: dialogs::Citation::default(),
+            bib_report: None,
             table: dialogs::Table::default(),
             palette: dialogs::Palette::default(),
             word_count: None,

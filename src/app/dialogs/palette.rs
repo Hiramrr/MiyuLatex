@@ -48,6 +48,8 @@ pub(in crate::app) enum Command {
     Table,
     Figure,
     Reference,
+    Citation,
+    CheckBibliography,
     Compile,
     Stop,
     Rebuild,
@@ -212,6 +214,18 @@ impl App {
                 Command::Reference,
             ),
             (
+                "Añadir cita por DOI o arXiv…",
+                "",
+                saved_source,
+                Command::Citation,
+            ),
+            (
+                "Revisar bibliografía…",
+                "",
+                saved_source,
+                Command::CheckBibliography,
+            ),
+            (
                 "Compilar",
                 "F5",
                 !compiling && (latex || saved_source),
@@ -361,6 +375,8 @@ impl App {
                 self.outline = false;
                 self.config.show_sidebar = true;
             }
+            Command::Citation => self.open_citation(),
+            Command::CheckBibliography => self.check_bibliography(),
             Command::Compile => self.compile(false, ctx),
             Command::Stop => {
                 self.cancel.store(true, Ordering::Relaxed);

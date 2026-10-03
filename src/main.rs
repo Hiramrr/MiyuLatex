@@ -1,5 +1,6 @@
 mod app;
 mod backdrop;
+mod bib;
 mod compiler;
 mod config;
 mod custom;

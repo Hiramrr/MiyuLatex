@@ -195,6 +195,10 @@ impl App {
                         self.config.show_sidebar = true;
                         ui.close();
                     }
+                    if action(ui, "Cita por DOI o arXiv…", saved_source, "Descarga la entrada BibTeX de un DOI o de un artículo de arXiv y la añade a la bibliografía del proyecto. Requiere un archivo LaTeX guardado.").clicked() {
+                        self.open_citation();
+                        ui.close();
+                    }
                     ui.add_enabled_ui(latex, |ui| {
                         for (label, before, after) in [
                             ("Matemática en línea", "\\(", "\\)"),
@@ -252,6 +256,10 @@ impl App {
                         self.preferences_changed(&ctx);
                     }
                     ui.separator();
+                    if action(ui, "Revisar bibliografía…", saved_source, "Busca claves repetidas, campos obligatorios que faltan y entradas que ningún documento cita. Requiere un archivo LaTeX guardado.").clicked() {
+                        self.check_bibliography();
+                        ui.close();
+                    }
                     if action(ui, "Contar palabras del proyecto…", tool_ready && saved_source, "Cuenta la prosa del proyecto LaTeX. Requiere un archivo LaTeX guardado y ninguna otra operación en curso.").clicked() {
                         self.count_words(&ctx);
                         ui.close();

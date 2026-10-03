@@ -84,6 +84,11 @@ impl App {
             match result {
                 Ok(ToolResult::Message(message)) => self.message = message,
                 Ok(ToolResult::Words(count)) => self.word_count = Some(count),
+                Ok(ToolResult::Citation(entry)) => {
+                    if let Err(e) = self.add_citation(&entry) {
+                        self.message = e;
+                    }
+                }
                 Ok(ToolResult::Forward(page, x, y)) => {
                     self.pdf_marker = Some((page, x, y));
                     self.scroll_pdf_marker = true;

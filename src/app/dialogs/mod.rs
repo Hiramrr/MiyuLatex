@@ -2,11 +2,13 @@
 
 use super::*;
 
+mod bib;
 mod insert;
 mod palette;
 mod project;
 mod settings;
 
+pub(super) use bib::Citation;
 pub(super) use insert::Table;
 pub(super) use palette::Palette;
 pub(super) use project::{History, ProjectSearch, RenameLabel};
@@ -15,6 +17,8 @@ impl App {
     pub(super) fn dialogs(&mut self, ctx: &egui::Context) {
         self.project_search_dialog(ctx);
         self.history_dialog(ctx);
+        self.bib_report_dialog(ctx);
+        self.citation_dialog(ctx);
         self.rename_label_dialog(ctx);
         self.table_dialog(ctx);
         self.word_count_dialog(ctx);
