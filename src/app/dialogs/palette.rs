@@ -34,6 +34,7 @@ pub(in crate::app) enum Command {
     SearchProject,
     Comment,
     Definition,
+    RenameLabel,
     NextProblem,
     PreviousProblem,
     ToggleSidebar,
@@ -156,6 +157,7 @@ impl App {
                 Command::Comment,
             ),
             ("Ir a la definición", "F12", latex, Command::Definition),
+            ("Renombrar etiqueta LaTeX…", "", latex, Command::RenameLabel),
             ("Problema siguiente", "F8", problems, Command::NextProblem),
             (
                 "Problema anterior",
@@ -327,6 +329,7 @@ impl App {
                 self.changed_editor();
             }
             Command::Definition => self.goto_definition(self.editor().cursor),
+            Command::RenameLabel => self.start_rename_label(),
             Command::NextProblem => self.next_problem(false),
             Command::PreviousProblem => self.next_problem(true),
             Command::ToggleSidebar => {

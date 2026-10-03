@@ -821,3 +821,83 @@ fn definition_problems_and_command_palette() {
     assert_eq!((found[0].0, found[0].2), ("Detener compilación", false));
     fs::remove_dir_all(folder).unwrap();
 }
+
+#[test]
+fn renames_labels_and_inserts_dropped_images() {
+    let folder = std::env::temp_dir().join(format!("miyu-etiquetas-{}", std::process::id()));
+    let outside = std::env::temp_dir().join(format!("miyu-fuera-{}", std::process::id()));
+    fs::create_dir_all(folder.join("cap")).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    let folder = folder.canonicalize().unwrap();
+    let main = folder.join("main.tex");
+    let chapter = folder.join("cap/uno.tex");
+    fs::write(
+        &main,
+        "\\documentclass{article}\n\\begin{document}\n\\input{cap/uno}\nVer \\ref{sec:uno} y \\ref{otra}.\n\\label{otra}\n\\end{document}\n",
+    )
+    .unwrap();
+    fs::write(&chapter, "\\section{Uno}\\label{sec:uno}\n\\eqref{sec:uno}\n").unwrap();
+    let photo = outside.join("mi foto.png");
+    image::RgbImage::new(4, 4).save(&photo).unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(main.clone()), &ctx).unwrap();
+    app.backdrop = Backdrop::default();
+    tick(&mut app, &ctx, vec![]);
+
+    // Fuera de una etiqueta no se abre la ventana.
+    app.editor_mut().goto(0, 3);
+    app.start_rename_label();
+    assert!(app.rename_label.is_none());
+    app.editor_mut().goto(3, 10);
+    app.start_rename_label();
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!(app.rename_label.as_ref().unwrap().new, "sec:uno");
+    // Un nombre que ya existe o con caracteres inválidos se rechaza.
+    assert!(app.apply_rename_label("sec:uno", "otra").is_err());
+    assert!(app.apply_rename_label("sec:uno", "con espacio").is_err());
+    assert_eq!(fs::read_to_string(&chapter).unwrap().matches("sec:uno").count(), 2);
+    app.apply_rename_label("sec:uno", "sec:primera").unwrap();
+    // El documento abierto cambia en el editor y se puede deshacer.
+    assert!(app.editor().text().contains("\\ref{sec:primera} y \\ref{otra}"));
+    assert!(app.editor().dirty());
+    assert_eq!(app.editor().cursor, Pos::new(3, 10));
+    assert!(fs::read_to_string(&main).unwrap().contains("\\ref{sec:uno}"));
+    // El archivo cerrado se reescribe y guarda la versión anterior.
+    assert_eq!(
+        fs::read_to_string(&chapter).unwrap(),
+        "\\section{Uno}\\label{sec:primera}\n\\eqref{sec:primera}\n"
+    );
+    assert_eq!(latex::versions(&chapter).len(), 1);
+    assert!(app.message.contains("3 apariciones en 2 archivos"));
+
+    // Una imagen de fuera del proyecto se copia a images/ y entra como figura.
+    assert!(app.accepts_image(&photo));
+    assert!(!app.accepts_image(&outside.join("datos.csv")));
+    app.editor_mut().goto(4, 12);
+    app.insert_image(&photo);
+    assert!(folder.join("images/figura-1.png").is_file());
+    assert!(app.editor().text().contains("\\includegraphics[width=0.8\\linewidth]{images/figura-1.png}"));
+    assert!(app.message.contains("graphicx"));
+    // En Markdown entra como imagen; la que ya está en la carpeta no se copia.
+    let notes = folder.join("notas.md");
+    fs::write(&notes, "# Notas\n").unwrap();
+    app.open(&notes).unwrap();
+    assert!(app.accepts_image(&folder.join("images/figura-1.png")));
+    app.editor_mut().goto(1, 0);
+    app.insert_image(&folder.join("images/figura-1.png"));
+    // El cursor queda en el texto alternativo, listo para escribirlo.
+    assert_eq!(app.editor().cursor, Pos::new(1, 2));
+    let end = app.editor().end();
+    app.editor_mut().goto(end.row, end.col);
+    app.insert_image(&photo);
+    assert_eq!(
+        app.editor().text(),
+        "# Notas\n![](images/figura-1.png)![](images/figura-2.png)"
+    );
+    // En código, soltar una imagen la abre como siempre.
+    fs::write(folder.join("main.rs"), "fn main() {}\n").unwrap();
+    app.open(&folder.join("main.rs")).unwrap();
+    assert!(!app.accepts_image(&photo));
+    fs::remove_dir_all(folder).unwrap();
+    fs::remove_dir_all(outside).unwrap();
+}

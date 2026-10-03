@@ -49,6 +49,9 @@ citas y referencias sin resolver, con el archivo y la línea donde aparecen.
 Nuevo documento abre un archivo sin guardar. Nuevo proyecto crea una carpeta,
 y Abrir proyecto permite elegir una carpeta existente. Abrir archivo acepta
 texto, código, PDF e imágenes. También puedes arrastrarlos a la ventana.
+Si el documento activo es LaTeX o Markdown y ya está guardado, una imagen
+arrastrada se inserta en el cursor como figura o como imagen de Markdown, y
+se copia a `images/` cuando está fuera de la carpeta del documento.
 Los botones explican su acción al pasar el cursor. Las acciones que requieren
 un documento editable, un PDF o una compilación en curso se desactivan cuando
 no están disponibles. Los archivos y el esquema están a la izquierda,
@@ -201,6 +204,12 @@ encima, se desplazan hasta que vuelvas a compilar.
 `F12` o `Cmd`+clic sobre `\ref`, `\eqref` o `\cref` lleva a su `\label`; sobre
 `\cite` y sus variantes, a la entrada de la bibliografía; y sobre `\input`,
 `\include`, `\addbibresource` o `\includegraphics`, abre el archivo.
+
+Renombrar etiqueta LaTeX, en Editar, cambia la etiqueta bajo el cursor en su
+`\label` y en todas sus referencias del proyecto, sin tocar los comentarios.
+Los documentos abiertos quedan sin guardar y el cambio se deshace en ellos;
+los archivos cerrados se reescriben y guardan la versión anterior en su
+historial.
 
 Mostrar esta línea en el PDF (`Cmd+Shift+J`) lleva del código a la página y
 resalta la línea. Un doble clic o `Cmd`+clic en el PDF abre el archivo y la

@@ -9,12 +9,13 @@ mod settings;
 
 pub(super) use insert::Table;
 pub(super) use palette::Palette;
-pub(super) use project::{History, ProjectSearch};
+pub(super) use project::{History, ProjectSearch, RenameLabel};
 
 impl App {
     pub(super) fn dialogs(&mut self, ctx: &egui::Context) {
         self.project_search_dialog(ctx);
         self.history_dialog(ctx);
+        self.rename_label_dialog(ctx);
         self.table_dialog(ctx);
         self.word_count_dialog(ctx);
         self.project_options_dialog(ctx);

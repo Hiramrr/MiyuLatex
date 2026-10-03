@@ -587,16 +587,50 @@ impl App {
             self.message = "Guarda el documento antes de insertar una figura".into();
             return;
         };
-        let Some(file) = rfd::FileDialog::new()
+        if let Some(file) = rfd::FileDialog::new()
             .set_title("Insertar figura")
             .set_directory(root.parent().unwrap())
             .add_filter("Figuras", &["png", "jpg", "jpeg", "pdf"])
             .pick_file()
-        else {
+        {
+            self.insert_image(&file);
+        }
+    }
+    /// Una imagen soltada sobre la ventana se inserta en el documento activo
+    /// si es LaTeX o Markdown y ya está guardado; si no, se abre en una pestaña.
+    pub(super) fn accepts_image(&self, file: &Path) -> bool {
+        let extension = file
+            .extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
+        match self.editor().format {
+            Format::Latex => {
+                self.root().is_some() && ["png", "jpg", "jpeg"].contains(&extension.as_str())
+            }
+            Format::Markdown => {
+                self.editor().path.is_some()
+                    && ["png", "jpg", "jpeg", "gif", "webp"].contains(&extension.as_str())
+            }
+            _ => false,
+        }
+    }
+    /// Inserta `file` como figura de LaTeX o imagen de Markdown. Si está fuera
+    /// de la carpeta del documento, o su ruta no sirve en LaTeX, se copia a
+    /// `images/`.
+    pub(super) fn insert_image(&mut self, file: &Path) {
+        let markdown = self.editor().format == Format::Markdown;
+        let anchor = if markdown {
+            self.editor().path.clone()
+        } else {
+            self.root()
+        };
+        let Some(base) = anchor.as_deref().and_then(Path::parent) else {
+            self.message = "Guarda el documento antes de insertar una imagen".into();
             return;
         };
-        let base = root.parent().unwrap();
-        let mut relative = file.strip_prefix(base).ok().map(PathBuf::from);
+        let file = file.canonicalize().unwrap_or_else(|_| file.into());
+        let base = base.canonicalize().unwrap_or_else(|_| base.into());
+        let mut relative = file.strip_prefix(&base).ok().map(PathBuf::from);
         if relative.as_ref().is_none_or(|p| {
             p.to_string_lossy()
                 .contains(['{', '}', '%', '#', '$', '\\'])
@@ -628,7 +662,7 @@ impl App {
                 }
             })();
             match result {
-                Ok(path) => relative = path.strip_prefix(base).ok().map(PathBuf::from),
+                Ok(path) => relative = path.strip_prefix(&base).ok().map(PathBuf::from),
                 Err(e) => {
                     self.message = e.to_string();
                     return;
@@ -636,6 +670,17 @@ impl App {
             }
         }
         let path = relative.unwrap().to_string_lossy().replace('\\', "/");
+        self.files = project_files(&self.project);
+        if markdown {
+            // Markdown exige los ángulos cuando la ruta lleva espacios.
+            let target = if path.contains(' ') {
+                format!("<{path}>")
+            } else {
+                path
+            };
+            self.insert_snippet(&format!("![$0]({target})"));
+            return;
+        }
         self.insert_snippet(&format!("\\begin{{figure}}[htbp]\n    \\centering\n    \\includegraphics[width=0.8\\linewidth]{{{path}}}\n    \\caption{{$0}}\n    \\label{{fig:}}\n\\end{{figure}}"));
         let text = self.editor().text();
         if !crate::editor::regex(r"\\usepackage(?:\[[^\]]*\])?\s*\{[^}]*\bgraphicx\b[^}]*\}")
@@ -644,7 +689,6 @@ impl App {
             self.message =
                 "Figura insertada. El documento principal necesita \\usepackage{graphicx}.".into();
         }
-        self.files = project_files(&self.project);
         self.refresh_sources();
     }
     pub(super) fn jump(&mut self, target: &Target) {

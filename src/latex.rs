@@ -281,6 +281,9 @@ fn source_citations(source: &Source) -> Rc<[Target]> {
     targets.into()
 }
 
+/// Un comando con sus argumentos opcionales y el contenido de sus llaves.
+const COMMAND: &str = r"\\([A-Za-z]+)\*?\s*(?:\[[^\]]*\]\s*)*\{([^{}]*)\}";
+
 /// Lo que nombra un comando LaTeX y a dónde lleva.
 #[derive(Debug, PartialEq)]
 pub enum Reference {
@@ -293,7 +296,7 @@ pub enum Reference {
 /// Referencia, cita o archivo del comando que rodea la columna `col` de `line`.
 pub fn reference_at(line: &str, col: usize) -> Option<Reference> {
     let at = crate::editor::byte_col(line, col);
-    regex(r"\\([A-Za-z]+)\*?\s*(?:\[[^\]]*\]\s*)*\{([^{}]*)\}")
+    regex(COMMAND)
         .captures_iter(line)
         .find_map(|m| {
             let keys = m.get(2).unwrap();
@@ -321,10 +324,51 @@ pub fn reference_at(line: &str, col: usize) -> Option<Reference> {
                 "bibliography" | "addbibresource" => Reference::File(key.into(), &["bib"]),
                 "includegraphics" => Reference::File(key.into(), &["pdf", "png", "jpg", "jpeg"]),
                 _ if command.contains("cite") => Reference::Citation(key.into()),
+                "label" => Reference::Label(key.into()),
                 _ if command.ends_with("ref") => Reference::Label(key.into()),
                 _ => return None,
             })
         })
+}
+
+/// `text` con la etiqueta `old` cambiada por `new` en su `\label` y en los
+/// comandos que la citan, y cuántas veces aparecía. Los comentarios y el
+/// código literal no cambian.
+pub fn rename_label(text: &str, old: &str, new: &str) -> (String, usize) {
+    let clean = code(text);
+    let mut out = String::with_capacity(text.len());
+    let mut count = 0;
+    for (i, (line, clean)) in text.split('\n').zip(clean.split('\n')).enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        // Bytes de la línea ya copiados.
+        let mut done = 0;
+        for m in regex(COMMAND).captures_iter(clean) {
+            let command = m[1].to_lowercase();
+            if command != "label" && !command.ends_with("ref") {
+                continue;
+            }
+            let keys = m.get(2).unwrap();
+            let mut start = keys.start();
+            for key in keys.as_str().split(',') {
+                if key.trim() == old {
+                    // `clean` conserva las columnas, no los bytes.
+                    let lead = key.len() - key.trim_start().len();
+                    let col = clean[..start + lead].chars().count();
+                    let from = crate::editor::byte_col(line, col);
+                    let to = crate::editor::byte_col(line, col + old.chars().count());
+                    out.push_str(&line[done..from]);
+                    out.push_str(new);
+                    done = to;
+                    count += 1;
+                }
+                start += key.len() + 1;
+            }
+        }
+        out.push_str(&line[done..]);
+    }
+    (out, count)
 }
 
 pub fn table(rows: usize, columns: usize, alignment: char) -> String {
@@ -583,6 +627,22 @@ mod tests {
             Some(Reference::Label("sec:año".into()))
         );
         assert_eq!(reference_at("\\section{Título}", 10), None);
+        assert_eq!(
+            reference_at("\\label{sec:a}", 8),
+            Some(Reference::Label("sec:a".into()))
+        );
+    }
+
+    #[test]
+    fn renames_a_label_and_its_references() {
+        let text = "ñ \\label{a} \\ref{a} \\cref{b, a,ab} % ñ \\ref{a}\r\n\\eqref{ab} \\cite{a} \\ref {a}";
+        let (renamed, count) = rename_label(text, "a", "sec:año");
+        assert_eq!(count, 4);
+        assert_eq!(
+            renamed,
+            "ñ \\label{sec:año} \\ref{sec:año} \\cref{b, sec:año,ab} % ñ \\ref{a}\r\n\\eqref{ab} \\cite{a} \\ref {sec:año}"
+        );
+        assert_eq!(rename_label(text, "zz", "x"), (text.to_string(), 0));
     }
 
     #[test]

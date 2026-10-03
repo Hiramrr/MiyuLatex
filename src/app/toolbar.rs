@@ -125,6 +125,10 @@ impl App {
                         self.goto_definition(self.editor().cursor);
                         ui.close();
                     }
+                    if action(ui, "Renombrar etiqueta LaTeX…", latex, "Cambia la etiqueta bajo el cursor en su \\label y en todas sus referencias del proyecto. Disponible en LaTeX.").clicked() {
+                        self.start_rename_label();
+                        ui.close();
+                    }
                     if action(ui, "Problema siguiente", !self.diagnostics.is_empty(), "Lleva el cursor al siguiente problema de la última compilación. F8; con Mayús, al anterior.").clicked() {
                         self.next_problem(false);
                         ui.close();

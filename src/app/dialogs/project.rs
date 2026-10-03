@@ -37,7 +37,134 @@ impl History {
     }
 }
 
+/// Ventana para renombrar una etiqueta LaTeX en todo el proyecto.
+pub(in crate::app) struct RenameLabel {
+    old: String,
+    pub(in crate::app) new: String,
+    focus: bool,
+}
+
 impl App {
+    /// Abre la ventana con la etiqueta del `\label` o la referencia bajo el cursor.
+    pub(in crate::app) fn start_rename_label(&mut self) {
+        let cursor = self.editor().cursor;
+        let found = (self.editor().format == Format::Latex)
+            .then(|| self.editor().lines.get(cursor.row))
+            .flatten()
+            .and_then(|line| latex::reference_at(line, cursor.col));
+        match found {
+            Some(latex::Reference::Label(old)) => {
+                self.rename_label = Some(RenameLabel {
+                    new: old.clone(),
+                    old,
+                    focus: true,
+                });
+            }
+            _ => {
+                self.message =
+                    "Pon el cursor sobre un \\label o una referencia para renombrar su etiqueta"
+                        .into();
+            }
+        }
+    }
+    /// Cambia la etiqueta en los documentos abiertos, que quedan sin guardar,
+    /// y en el resto de los archivos del proyecto, que se reescriben.
+    pub(in crate::app) fn apply_rename_label(&mut self, old: &str, new: &str) -> Result<(), String> {
+        if new.is_empty() || new.contains(['{', '}', '\\', '%', '#', ',', ' ']) {
+            return Err("Una etiqueta no admite espacios, comas, llaves, \\, % ni #".into());
+        }
+        let mut sources = self.completion_sources();
+        if self.editor().path.is_none() {
+            sources.push(Source {
+                path: PathBuf::new(),
+                text: self.editor().text(),
+            });
+        }
+        if latex::labels(&sources).iter().any(|t| t.label == new) {
+            return Err(format!("Ya existe la etiqueta «{new}»"));
+        }
+        let (mut total, mut files) = (0, 0);
+        for source in &sources {
+            let (text, count) = latex::rename_label(&source.text, old, new);
+            if count == 0 {
+                continue;
+            }
+            let untitled = source.path.as_os_str().is_empty();
+            let active = self.active;
+            let open = self.documents.iter_mut().enumerate().find(|(i, d)| {
+                if untitled {
+                    *i == active
+                } else {
+                    d.editor.path.as_ref() == Some(&source.path)
+                }
+            });
+            if let Some((_, doc)) = open {
+                let cursor = doc.editor.cursor;
+                let end = doc.editor.end();
+                doc.editor.replace(crate::editor::Pos::new(0, 0), end, &text);
+                doc.editor.goto(cursor.row, cursor.col);
+            } else {
+                // La versión anterior queda en el historial del archivo.
+                latex::checkpoint(&source.path, &source.text)
+                    .and_then(|()| config::atomic_write(&source.path, text.as_bytes()))
+                    .map_err(|e| format!("No pude cambiar {}: {e}", source.path.display()))?;
+            }
+            total += count;
+            files += 1;
+        }
+        self.changed_editor();
+        self.refresh_sources();
+        self.message = if total == 0 {
+            format!("No encontré la etiqueta «{old}»")
+        } else {
+            format!("«{old}» ahora es «{new}»: {total} apariciones en {files} archivos")
+        };
+        Ok(())
+    }
+    pub(super) fn rename_label_dialog(&mut self, ctx: &egui::Context) {
+        let Some(mut rename) = self.rename_label.take() else {
+            return;
+        };
+        let mut open = true;
+        let mut apply = false;
+        egui::Window::new("Renombrar etiqueta")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.label(format!(
+                    "Cambia «{}» en su \\label y en todas sus referencias del proyecto.",
+                    rename.old
+                ));
+                let response = ui.add(
+                    TextEdit::singleline(&mut rename.new)
+                        .hint_text("Nombre nuevo")
+                        .desired_width(320.0),
+                );
+                if std::mem::take(&mut rename.focus) {
+                    response.request_focus();
+                }
+                let ready = !rename.new.is_empty() && rename.new != rename.old;
+                apply = ready && response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+                ui.horizontal_wrapped(|ui| {
+                    apply |= action(ui, "Renombrar", ready, "Cambia la etiqueta en todo el proyecto. Los documentos abiertos quedan sin guardar y se puede deshacer; los demás archivos se reescriben y conservan la versión anterior en su historial.").clicked();
+                    if action(ui, "Cancelar", true, "Cierra sin cambiar nada.").clicked() {
+                        ui.close_kind(egui::UiKind::Window);
+                    }
+                });
+            });
+        if apply {
+            match self.apply_rename_label(&rename.old.clone(), &rename.new.clone()) {
+                Ok(()) => return,
+                Err(e) => self.message = e,
+            }
+        }
+        if open {
+            self.rename_label = Some(rename);
+        } else {
+            self.focus_editor = true;
+        }
+    }
     pub(super) fn project_search_dialog(&mut self, ctx: &egui::Context) {
         if self.search.open {
             let mut open = true;

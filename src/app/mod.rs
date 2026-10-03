@@ -100,6 +100,7 @@ pub struct App {
     save_at: Option<Instant>,
     search: dialogs::ProjectSearch,
     history: Option<dialogs::History>,
+    rename_label: Option<dialogs::RenameLabel>,
     table: dialogs::Table,
     palette: dialogs::Palette,
     word_count: Option<String>,
@@ -210,6 +211,7 @@ impl App {
             save_at: None,
             search: dialogs::ProjectSearch::default(),
             history: None,
+            rename_label: None,
             table: dialogs::Table::default(),
             palette: dialogs::Palette::default(),
             word_count: None,
@@ -289,6 +291,8 @@ impl App {
                 let path = file.path().to_path_buf();
                 if path.is_dir() {
                     self.open_project(path);
+                } else if self.accepts_image(&path) {
+                    self.insert_image(&path);
                 } else if let Err(e) = self.open(&path) {
                     self.message = e;
                 }
