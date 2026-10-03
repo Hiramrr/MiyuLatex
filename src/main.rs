@@ -3,6 +3,7 @@ mod backdrop;
 mod compiler;
 mod config;
 mod custom;
+mod diff;
 mod editor;
 mod format;
 mod highlight;

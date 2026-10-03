@@ -18,11 +18,15 @@ pub(in crate::app) struct History {
     index: usize,
     /// Texto de la versión elegida, si se pudo leer.
     text: Option<String>,
+    /// Mostrar las dos versiones enteras en lugar de solo lo que cambió.
+    side_by_side: bool,
+    /// Cambios entre la versión elegida y el texto actual, y la huella de ambos.
+    changes: (u64, LayoutJob),
 }
 
 impl History {
     pub(in crate::app) fn new(file: PathBuf) -> (Self, Result<(), String>) {
-        let mut history = Self { versions: latex::versions(&file), file, index: 0, text: None };
+        let mut history = Self { versions: latex::versions(&file), file, index: 0, text: None, side_by_side: false, changes: Default::default() };
         let read = if history.versions.is_empty() { Ok(()) } else { history.select(0) };
         (history, read)
     }
@@ -42,6 +46,42 @@ pub(in crate::app) struct RenameLabel {
     old: String,
     pub(in crate::app) new: String,
     focus: bool,
+}
+
+/// Líneas que cambian de `old` a `new`, con tres de contexto alrededor.
+fn changes(old: &str, new: &str, theme: &Theme, size: f32) -> LayoutJob {
+    let lines = crate::diff::lines(old, new);
+    let near = |i: usize| {
+        let range = i.saturating_sub(3)..(i + 4).min(lines.len());
+        lines[range].iter().any(|(change, _)| *change != crate::diff::Change::Same)
+    };
+    let mut job = LayoutJob::default();
+    let mut skipped = false;
+    for (i, (change, line)) in lines.iter().enumerate() {
+        let (mark, tint) = match change {
+            crate::diff::Change::Same => ("  ", None),
+            crate::diff::Change::Removed => ("− ", Some(theme.error)),
+            crate::diff::Change::Added => ("+ ", Some(theme.success)),
+        };
+        if !near(i) {
+            if !std::mem::replace(&mut skipped, true) {
+                let format = egui::TextFormat::simple(FontId::monospace(size), col(theme.muted()));
+                job.append("  ⋯\n", 0.0, format);
+            }
+            continue;
+        }
+        skipped = false;
+        let mut format = egui::TextFormat::simple(FontId::monospace(size), col(theme.fg));
+        if let Some(tint) = tint {
+            format.background = col(theme::mix(theme.bg, tint, 0.28));
+        }
+        job.append(&format!("{mark}{line}\n"), 0.0, format);
+    }
+    if job.is_empty() {
+        let format = egui::TextFormat::simple(FontId::proportional(size), col(theme.muted()));
+        job.append("Esta versión es igual al texto actual.", 0.0, format);
+    }
+    job
 }
 
 impl App {
@@ -236,6 +276,18 @@ impl App {
             }
             restore = action(ui, "Restaurar versión en el editor", history.text.is_some(), "Reemplaza el texto del editor con esta versión. Puedes deshacerlo antes de guardar. Requiere una versión que se pueda leer.").clicked();
             let current = self.documents.iter().find(|d| d.editor.path.as_ref() == Some(&history.file)).map(|d| d.editor.text()).unwrap_or_default();
+            ui.checkbox(&mut history.side_by_side, "Ver las dos versiones completas").on_hover_text("Sin marcar se muestran solo las líneas que cambian: en rojo las de la versión anterior y en verde las del texto actual.");
+            if !history.side_by_side {
+                let old = history.text.as_deref().unwrap_or_default().replace("\r\n", "\n");
+                let key = egui::util::hash((&old, &current, self.theme.dark));
+                if history.changes.0 != key {
+                    history.changes = (key, changes(&old, &current, &self.theme, 13.0));
+                }
+                ScrollArea::both().id_salt("history_changes").max_height(420.0).auto_shrink([false, true]).show(ui, |ui| {
+                    ui.add(egui::Label::new(history.changes.1.clone()).extend());
+                });
+                return;
+            }
             ui.columns(2, |columns| {
                 columns[0].label("Versión anterior");
                 ScrollArea::both().id_salt("history_old").max_height(420.0).show(&mut columns[0], |ui| {
