@@ -1640,3 +1640,290 @@ fn export_commands_follow_the_active_document() {
     assert!(!enabled(&app, "Crear presentación"));
     fs::remove_dir_all(folder).unwrap();
 }
+
+/// Aplicación con un documento de texto largo, sin paneles que estorben.
+fn writing_app(name: &str, lines: usize) -> (App, egui::Context, PathBuf) {
+    let folder = std::env::temp_dir().join(format!("miyu-{name}-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("texto.txt");
+    let text: String = (0..lines).map(|i| format!("línea número {i}\n")).collect();
+    fs::write(&path, text).unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(path), &ctx).unwrap();
+    app.config.autosave = false;
+    app.config.completions = false;
+    app.config.show_sidebar = false;
+    app.config.show_preview = false;
+    app.config.mascot = false;
+    app.backdrop = Backdrop::default();
+    // egui anima los desplazamientos ~0,3 s de reloj simulado (1/60 s por cuadro):
+    // se deja pasar para que no queden animaciones del arranque a medias.
+    for _ in 0..25 {
+        tick(&mut app, &ctx, vec![]);
+    }
+    (app, ctx, folder)
+}
+
+#[test]
+fn typewriter_keeps_the_cursor_line_centered() {
+    let (mut app, ctx, folder) = writing_app("maquina", 400);
+    app.config.typewriter = true;
+    let settle = |app: &mut App, events: Vec<egui::Event>| {
+        tick(app, &ctx, events);
+        for _ in 0..3 {
+            tick(app, &ctx, vec![]);
+        }
+    };
+    let offset = |app: &App| {
+        let typewriter = &app.documents[app.active].typewriter;
+        typewriter.line - typewriter.center
+    };
+    let last = app.editor().lines.len() - 1;
+    // Al medio, al principio y al final, donde hace falta margen extra.
+    for row in [200, 0, last, 3, 120] {
+        app.editor_mut().goto(row, 0);
+        app.sync_cursor = true;
+        settle(&mut app, vec![]);
+        assert!(offset(&app).abs() < 30.0, "fila {row}: {}", offset(&app));
+    }
+    // Las flechas siguen centrando.
+    for _ in 0..5 {
+        settle(&mut app, vec![key(Key::ArrowDown, Modifiers::NONE)]);
+        assert!(offset(&app).abs() < 30.0, "flecha: {}", offset(&app));
+    }
+    assert_eq!(app.editor().cursor.row, 125);
+    // Teclear una línea nueva también.
+    settle(&mut app, vec![key(Key::Enter, Modifiers::NONE)]);
+    assert!(offset(&app).abs() < 30.0, "intro: {}", offset(&app));
+
+    // Con la rueda el texto se mueve y nadie lo devuelve al centro.
+    let over = egui::pos2(600.0, 400.0);
+    settle(&mut app, vec![egui::Event::PointerMoved(over)]);
+    let before = offset(&app);
+    settle(
+        &mut app,
+        vec![egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -150.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Modifiers::NONE,
+        }],
+    );
+    let scrolled = offset(&app);
+    assert!(scrolled < before - 50.0, "{before} -> {scrolled}");
+    // La rueda de egui se reparte en varios cuadros; luego el texto queda donde la dejó.
+    for _ in 0..15 {
+        tick(&mut app, &ctx, vec![]);
+    }
+    let resting = offset(&app);
+    assert!(resting < before - 50.0, "{before} -> {resting}");
+    for _ in 0..5 {
+        tick(&mut app, &ctx, vec![]);
+    }
+    assert!((offset(&app) - resting).abs() < 1.0);
+    // Al volver a escribir se centra otra vez.
+    settle(&mut app, vec![egui::Event::Text("a".into())]);
+    assert!(offset(&app).abs() < 30.0, "tecla: {}", offset(&app));
+
+    // Con ajuste de línea y un bloque plegado.
+    app.config.soft_wrap = true;
+    let long = "palabra ".repeat(300);
+    app.editor_mut().goto(50, 0);
+    app.editor_mut().insert(&long);
+    app.sync_cursor = true;
+    settle(&mut app, vec![]);
+    assert!(offset(&app).abs() < 30.0, "ajuste: {}", offset(&app));
+    fs::remove_dir_all(folder).unwrap();
+}
+
+#[test]
+fn typewriter_centers_the_cursor_in_both_split_panes() {
+    let (mut app, ctx, folder) = writing_app("maquina-dividida", 300);
+    let second = folder.join("otro.txt");
+    fs::write(&second, (0..300).map(|i| format!("otra {i}\n")).collect::<String>()).unwrap();
+    app.open(&second).unwrap();
+    app.toggle_split();
+    app.config.typewriter = true;
+    for _ in 0..25 {
+        tick(&mut app, &ctx, vec![]);
+    }
+    for index in [0, 1] {
+        // Un clic en el otro panel le quita el foco al que lo tenía.
+        ctx.memory_mut(|m| m.surrender_focus(app.documents[1 - index].id));
+        app.activate(index);
+        app.editor_mut().goto(150, 0);
+        app.sync_cursor = true;
+        for _ in 0..4 {
+            tick(&mut app, &ctx, vec![]);
+        }
+        assert_eq!(app.active, index);
+        let typewriter = &app.documents[index].typewriter;
+        let offset = typewriter.line - typewriter.center;
+        assert!(offset.abs() < 30.0, "panel {index}: {offset}");
+    }
+    fs::remove_dir_all(folder).unwrap();
+}
+
+#[test]
+fn focus_mode_hides_panels_and_restores_them_untouched() {
+    let (mut app, ctx, folder) = writing_app("sin-distracciones", 20);
+    app.config.show_sidebar = true;
+    app.config.show_preview = true;
+    app.config.mascot = true;
+    app.panel = true;
+    let width = |app: &App| app.documents[app.active].typewriter.width;
+    let saved = serde_json::to_value(&app.config).unwrap();
+    tick(&mut app, &ctx, vec![]);
+    tick(&mut app, &ctx, vec![]);
+    let normal = width(&app);
+    assert!(normal < 1100.0, "{normal}");
+
+    tick(&mut app, &ctx, vec![key(Key::E, Modifiers::COMMAND | Modifiers::SHIFT)]);
+    tick(&mut app, &ctx, vec![]);
+    tick(&mut app, &ctx, vec![]);
+    assert!(app.zen);
+    // El editor ocupa toda la ventana y los paneles siguen "abiertos" en la configuración.
+    assert!(width(&app) > 1270.0, "{}", width(&app));
+    assert_eq!(serde_json::to_value(&app.config).unwrap(), saved);
+    assert!(app.config.show_sidebar && app.config.show_preview && app.config.mascot && app.panel);
+    // Pedir un panel (F2) sale del modo sin tocar la preferencia.
+    tick(&mut app, &ctx, vec![key(Key::F2, Modifiers::NONE)]);
+    assert!(!app.zen && app.config.show_sidebar);
+
+    // La misma acción y Esc salen del modo.
+    app.toggle_zen();
+    tick(&mut app, &ctx, vec![]);
+    assert!(app.zen);
+    tick(&mut app, &ctx, vec![key(Key::Escape, Modifiers::NONE)]);
+    tick(&mut app, &ctx, vec![]);
+    tick(&mut app, &ctx, vec![]);
+    assert!(!app.zen);
+    assert!((width(&app) - normal).abs() < 1.0, "{} / {normal}", width(&app));
+    assert_eq!(serde_json::to_value(&app.config).unwrap(), saved);
+    // El comando está en la paleta.
+    assert!(app.commands().iter().any(|c| c.3 == dialogs::Command::ToggleFocus));
+    fs::remove_dir_all(folder).unwrap();
+}
+
+#[test]
+fn escape_closes_the_search_before_leaving_focus_mode() {
+    let (mut app, ctx, folder) = writing_app("sin-distracciones-esc", 5);
+    app.toggle_zen();
+    app.start_find();
+    tick(&mut app, &ctx, vec![]);
+    tick(&mut app, &ctx, vec![key(Key::Escape, Modifiers::NONE)]);
+    tick(&mut app, &ctx, vec![]);
+    assert!(!app.find);
+    assert!(app.zen);
+    tick(&mut app, &ctx, vec![key(Key::Escape, Modifiers::NONE)]);
+    assert!(!app.zen);
+    fs::remove_dir_all(folder).unwrap();
+}
+
+#[test]
+fn word_goal_counts_net_words_added() {
+    let (mut app, ctx, folder) = writing_app("meta", 1);
+    app.editor_mut().replace(Pos::new(0, 0), Pos::new(1, 0), "uno dos\n");
+    tick(&mut app, &ctx, vec![]);
+    assert!(app.goal_status().is_none());
+    app.set_goal(5);
+    // Las palabras que ya había no cuentan.
+    assert_eq!(app.goal_status().unwrap().0, "0 / 5 palabras");
+    app.focus_editor = true;
+    tick(&mut app, &ctx, vec![]);
+    app.editor_mut().goto(0, 7);
+    app.sync_cursor = true;
+    tick(&mut app, &ctx, vec![egui::Event::Text(" tres cuatro".into())]);
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!(app.goal_status().unwrap().0, "2 / 5 palabras");
+    let goal = app.documents[app.active].goal.as_ref().unwrap();
+    assert_eq!(goal.counted, app.editor().revision);
+    // Borrar por debajo del punto de partida no da progreso negativo.
+    let end = app.editor().end();
+    app.editor_mut().replace(Pos::new(0, 0), end, "uno\n");
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!(app.goal_status().unwrap().0, "0 / 5 palabras");
+    assert!(!app.goal_status().unwrap().2);
+    // Alcanzarla avisa una vez y queda marcada.
+    app.message.clear();
+    app.editor_mut().goto(0, 3);
+    app.editor_mut().insert(" a b c d e f g");
+    tick(&mut app, &ctx, vec![]);
+    let (text, _, reached) = app.goal_status().unwrap();
+    assert_eq!(text, "6 / 5 palabras");
+    assert!(reached);
+    assert!(app.message.starts_with("Meta alcanzada"));
+    app.clear_goal();
+    assert!(app.goal_status().is_none());
+    fs::remove_dir_all(folder).unwrap();
+}
+
+#[test]
+fn word_goal_ignores_latex_commands_and_waits_in_big_documents() {
+    let folder = std::env::temp_dir().join(format!("miyu-meta-latex-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("tesis.tex");
+    let head = "\\documentclass{article}\n\\begin{document}\nInicio.\n";
+    fs::write(&path, format!("{head}\\end{{document}}\n")).unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(path), &ctx).unwrap();
+    app.config.autosave = false;
+    app.config.autocompile = false;
+    app.backdrop = Backdrop::default();
+    tick(&mut app, &ctx, vec![]);
+    app.set_goal(100);
+    app.editor_mut().goto(3, 0);
+    app.editor_mut().insert("\\section{Intro} Texto con \\textbf{negrita} y $x^2$ % oculto\n");
+    tick(&mut app, &ctx, vec![]);
+    // Intro, Texto, con, negrita, y.
+    assert_eq!(app.goal_status().unwrap().0, "5 / 100 palabras");
+
+    // Un documento grande se recuenta al hacer una pausa, no en cada edición.
+    let filler = "palabra de relleno para el texto. ".repeat(1200);
+    app.editor_mut().goto(3, 0);
+    app.editor_mut().insert(&format!("{filler}\n"));
+    assert!(app.editor().source().len() > 32 * 1024);
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!(app.goal_status().unwrap().0, "5 / 100 palabras");
+    std::thread::sleep(Duration::from_millis(700));
+    tick(&mut app, &ctx, vec![]);
+    let done = app.documents[app.active].goal.as_ref().unwrap().done();
+    assert_eq!(done, 5 + 6 * 1200);
+    fs::remove_dir_all(folder).unwrap();
+}
+
+#[test]
+fn typewriter_centers_lines_below_folded_blocks() {
+    let folder = std::env::temp_dir().join(format!("miyu-maquina-pliegues-{}", std::process::id()));
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("notas.md");
+    let text: String = (0..120)
+        .map(|i| format!("## Sección {i}\n\nPrimera línea {i}.\nSegunda línea {i}.\n\n"))
+        .collect();
+    fs::write(&path, text).unwrap();
+    let ctx = egui::Context::default();
+    let mut app = App::new(Some(path), &ctx).unwrap();
+    app.config.autosave = false;
+    app.config.show_sidebar = false;
+    app.config.show_preview = false;
+    app.config.mascot = false;
+    app.config.typewriter = true;
+    app.backdrop = Backdrop::default();
+    for _ in 0..25 {
+        tick(&mut app, &ctx, vec![]);
+    }
+    app.fold_everything(true);
+    assert!(app.editor().has_folds());
+    // Cada sección plegada ocupa una sola línea: el cursor se centra igual.
+    for row in [5 * 100, 5 * 60, 5 * 119] {
+        app.editor_mut().goto(row, 0);
+        app.sync_cursor = true;
+        for _ in 0..4 {
+            tick(&mut app, &ctx, vec![]);
+        }
+        let typewriter = &app.documents[app.active].typewriter;
+        let offset = typewriter.line - typewriter.center;
+        assert!(offset.abs() < 30.0, "fila {row}: {offset}");
+    }
+    fs::remove_dir_all(folder).unwrap();
+}

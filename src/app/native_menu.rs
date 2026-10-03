@@ -302,7 +302,8 @@ impl App {
                 Undo | Redo | Find | GotoLine | SearchProject | Comment | Format | Definition
                 | RenameLabel | NextProblem | PreviousProblem => "Editar",
                 ToggleSidebar | ShowGit | TogglePreview | ToggleWrap | ToggleSplit | Fold | FoldAll
-                | UnfoldAll | ToggleProblems | ToggleMascot => "Ver",
+                | UnfoldAll | ToggleProblems | ToggleMascot | ToggleTypewriter | ToggleFocus
+                | WordGoal => "Ver",
                 ToggleTerminal | NewTerminal | RunCode | TestCode | CheckCode => "Desarrollo",
                 Bold | Italic | Symbol | Table | Figure | PasteImage | Reference | Citation => {
                     "Insertar"
@@ -310,13 +311,15 @@ impl App {
                 _ => "LaTeX",
             };
             let checked = match command {
-                ToggleSidebar => self.config.show_sidebar,
-                TogglePreview => self.config.show_preview,
+                ToggleSidebar => self.config.show_sidebar && !self.zen,
+                TogglePreview => self.config.show_preview && !self.zen,
                 ToggleWrap => self.config.soft_wrap,
                 ToggleSplit => self.split.is_some(),
                 ToggleProblems => self.panel && !self.developer.selected,
                 ToggleTerminal => self.panel && self.developer.selected,
                 ToggleMascot => self.config.mascot,
+                ToggleTypewriter => self.config.typewriter,
+                ToggleFocus => self.zen,
                 ToggleAutocompile => self.config.autocompile,
                 ToggleAutosave => self.config.autosave,
                 Equation => self.equation.open,

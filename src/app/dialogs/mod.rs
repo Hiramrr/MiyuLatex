@@ -4,6 +4,7 @@ use super::*;
 
 mod bib;
 mod equation;
+mod goal;
 mod insert;
 mod palette;
 mod project;
@@ -11,6 +12,7 @@ mod settings;
 
 pub(super) use bib::Citation;
 pub(super) use equation::Equation;
+pub(super) use goal::GoalDialog;
 pub(super) use insert::Table;
 pub(super) use palette::Command;
 pub(super) use palette::Palette;
@@ -26,6 +28,7 @@ impl App {
         self.rename_label_dialog(ctx);
         self.table_dialog(ctx);
         self.word_count_dialog(ctx);
+        self.goal_dialog(ctx);
         self.project_options_dialog(ctx);
         self.settings_dialog(ctx);
         self.templates_dialog(ctx);
@@ -84,6 +87,7 @@ impl App {
                         ("Shift+O", "Abrir rápido un archivo del proyecto"),
                         ("Shift+F", "Buscar en el proyecto"),
                         ("Shift+J", "Mostrar la línea en el PDF"),
+                        ("Shift+E", "Modo sin distracciones (Esc para salir)"),
                         ("T", "Insertar símbolo"),
                         ("B", "Negrita"),
                         ("I", "Cursiva"),

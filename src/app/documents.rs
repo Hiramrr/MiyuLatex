@@ -12,6 +12,8 @@ impl App {
             pdf: None,
             git: None,
             changes: (0, Vec::new()),
+            goal: None,
+            typewriter: Default::default(),
         });
         self.activate(self.documents.len() - 1);
     }

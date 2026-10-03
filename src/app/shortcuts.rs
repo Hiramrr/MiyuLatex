@@ -9,8 +9,9 @@ impl App {
     pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
         let cmd = Modifiers::COMMAND;
         if Self::shortcut(ctx, Modifiers::CTRL | Modifiers::SHIFT, Key::Backtick) {
+            self.leave_zen();
             self.new_terminal(ctx);
-        } else if Self::shortcut(ctx, Modifiers::CTRL, Key::Backtick) {
+        } else if Self::shortcut(ctx, Modifiers::CTRL, Key::Backtick) && !self.leave_zen() {
             self.toggle_terminal(ctx);
         }
         if Self::shortcut(ctx, cmd | Modifiers::SHIFT, Key::U) {
@@ -38,10 +39,14 @@ impl App {
             self.open_quick();
         }
         if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::G) {
+            self.leave_zen();
             self.show_git(ctx);
         }
         if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::J) {
             self.sync_to_pdf(ctx);
+        }
+        if Self::shortcut(ctx, Modifiers::COMMAND | Modifiers::SHIFT, Key::E) {
+            self.toggle_zen();
         }
         if Self::shortcut(ctx, cmd | Modifiers::SHIFT, Key::N) {
             self.new_project();
@@ -103,15 +108,15 @@ impl App {
         if Self::shortcut(ctx, Modifiers::NONE, Key::F1) {
             self.help = !self.help;
         }
-        if Self::shortcut(ctx, Modifiers::NONE, Key::F2) {
+        if Self::shortcut(ctx, Modifiers::NONE, Key::F2) && !self.leave_zen() {
             self.config.show_sidebar = !self.config.show_sidebar;
             self.preferences_changed(ctx);
         }
-        if Self::shortcut(ctx, Modifiers::NONE, Key::F3) {
+        if Self::shortcut(ctx, Modifiers::NONE, Key::F3) && !self.leave_zen() {
             self.config.show_preview = !self.config.show_preview;
             self.preferences_changed(ctx);
         }
-        if Self::shortcut(ctx, Modifiers::NONE, Key::F4) {
+        if Self::shortcut(ctx, Modifiers::NONE, Key::F4) && !self.leave_zen() {
             self.toggle_problems();
         }
         if Self::shortcut(ctx, Modifiers::NONE, Key::F6) {

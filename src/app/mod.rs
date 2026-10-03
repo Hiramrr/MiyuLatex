@@ -45,6 +45,7 @@ mod shortcuts;
 mod sidebar;
 mod toolbar;
 mod workspace;
+mod writing;
 
 use project::project_files;
 
@@ -66,6 +67,9 @@ struct Document {
     /// Líneas que cambiaron desde el último commit y la revisión del texto
     /// con que se calcularon.
     changes: (u64, Vec<(usize, crate::git::Mark)>),
+    /// Meta de palabras de la sesión de escritura.
+    goal: Option<writing::Goal>,
+    typewriter: writing::Typewriter,
 }
 /// Clave, celdas del tramado, puntos por celda y tamaño de ventana.
 type BackgroundFrame = (String, egui::ColorImage, f32, egui::Vec2);
@@ -127,6 +131,9 @@ pub struct App {
     table: dialogs::Table,
     palette: dialogs::Palette,
     word_count: Option<String>,
+    goal_dialog: Option<dialogs::GoalDialog>,
+    /// Modo sin distracciones. No se guarda: solo oculta los paneles al dibujar.
+    zen: bool,
     theme: Theme,
     backdrop: Backdrop,
     background_texture: Option<TextureHandle>,
@@ -250,6 +257,8 @@ impl App {
             table: dialogs::Table::default(),
             palette: dialogs::Palette::default(),
             word_count: None,
+            goal_dialog: None,
+            zen: false,
             theme: theme::builtin().remove(0),
             backdrop,
             background_texture: None,
@@ -330,6 +339,9 @@ impl App {
         self.poll_terminals(&ctx);
         self.poll_git(&ctx);
         self.refresh_tasks();
+        self.update_goal(&ctx);
+        // La barra de búsqueda se cierra con Esc sin consumirla.
+        let searching = self.find;
         if ctx.input(|i| i.viewport().close_requested()) && !self.allow_quit {
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
             self.request_close(Pending::Quit, &ctx);
@@ -375,6 +387,15 @@ impl App {
                             .size(13.0)
                             .color(col(self.theme.muted())),
                     );
+                    if let Some((text, hover, reached)) = self.goal_status() {
+                        let color = if reached {
+                            self.theme.success
+                        } else {
+                            self.theme.muted()
+                        };
+                        ui.label(RichText::new(text).size(13.0).color(col(color)))
+                            .on_hover_text(hover);
+                    }
                     if let Some(git) = &self.documents[self.active].git {
                         ui.label(
                             RichText::new(format!("Git: {}", git.branch))
@@ -432,13 +453,13 @@ impl App {
             });
         });
         let floor = status.response.rect.top();
-        if self.panel {
+        if self.panel && !self.zen {
             self.problems(ui);
         }
-        if self.config.show_sidebar {
+        if self.config.show_sidebar && !self.zen {
             self.sidebar(ui);
         }
-        if self.config.show_preview {
+        if self.config.show_preview && !self.zen {
             match self.editor().format {
                 Format::Latex => self.pdf_panel(ui),
                 Format::Markdown => self.markdown_panel(ui),
@@ -446,7 +467,7 @@ impl App {
             }
         }
         self.editor_panel(ui);
-        if self.config.mascot {
+        if self.config.mascot && !self.zen {
             let busy = self.compile_rx.is_some();
             let ok = self.result.as_ref().is_some_and(|r| r.ok);
             let shown = [
@@ -470,6 +491,10 @@ impl App {
         }
         self.dialogs(&ctx);
         self.workspace_dialogs(&ctx);
+        // Los diálogos, las sugerencias y los cursores múltiples ya consumieron su Esc.
+        if self.zen && !searching && ctx.input(|i| i.key_pressed(Key::Escape)) {
+            self.toggle_zen();
+        }
     }
 }
 impl eframe::App for App {

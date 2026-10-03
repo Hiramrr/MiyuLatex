@@ -12,7 +12,7 @@ impl App {
     }
     /// El estado del botón indica si el panel lateral está visible.
     pub(super) fn sidebar_toggle(&mut self, ui: &mut egui::Ui) {
-        let shown = self.config.show_sidebar;
+        let shown = self.config.show_sidebar && !self.zen;
         let (label, help) = if shown {
             (
                 "Ocultar panel lateral",
@@ -34,7 +34,7 @@ impl App {
         response.widget_info(|| {
             egui::WidgetInfo::selected(egui::WidgetType::Button, true, shown, label)
         });
-        if response.clicked() {
+        if response.clicked() && !self.leave_zen() {
             self.config.show_sidebar = !shown;
             self.preferences_changed(ui.ctx());
         }

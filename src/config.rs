@@ -21,6 +21,8 @@ pub struct Config {
     /// La vista previa va a la izquierda en vez de a la derecha.
     pub preview_left: bool,
     pub soft_wrap: bool,
+    /// La línea del cursor se mantiene centrada en el editor (máquina de escribir).
+    pub typewriter: bool,
     pub invert_preview: bool,
     pub background: String,
     pub background_style: String,
@@ -86,6 +88,7 @@ impl Default for Config {
             sidebar_right: false,
             preview_left: false,
             soft_wrap: true,
+            typewriter: false,
             invert_preview: false,
             background: String::new(),
             background_style: "dither".into(),

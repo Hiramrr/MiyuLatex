@@ -219,7 +219,12 @@ impl App {
         let size = self.config.font_size as f32;
         let wrap = self.config.soft_wrap;
         let spacing = self.config.line_height as f32;
-        let numbers = self.config.line_numbers;
+        let zen = self.zen;
+        let typewriter = self.config.typewriter;
+        // Sin números de línea en el modo sin distracciones.
+        let numbers = self.config.line_numbers && !zen;
+        // Margen para que la primera y la última línea también puedan quedar al centro.
+        let pad = if typewriter { (rect.height() / 2.0).floor() } else { 0.0 };
         let highlight_line = self.config.highlight_line;
         let guides = self.config.indent_guides;
         let find = self.find;
@@ -283,9 +288,12 @@ impl App {
         let changes = std::mem::take(&mut doc.changes.1);
         ScrollArea::both()
             .id_salt(doc.id.with("scroll"))
+            // La animación de egui no llega a tiempo: la línea se vería deslizarse tras cada tecla.
+            .animated(!typewriter)
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.set_min_size(rect.size());
+                ui.add_space(pad);
                 ui.horizontal_top(|ui| {
                     let gutter = if numbers {
                         let digits = doc.editor.lines.len().to_string().len().max(3);
@@ -293,7 +301,13 @@ impl App {
                     } else {
                         8.0
                     };
-                    let text_width = (rect.width() - gutter - 16.0).max(100.0);
+                    let mut text_width = (rect.width() - gutter - 16.0).max(100.0);
+                    if zen {
+                        // Columna de unos 80 caracteres, centrada.
+                        let column = ui.fonts_mut(|f| f.glyph_width(&FontId::monospace(size), ' '));
+                        text_width = text_width.min(column * 80.0 + 16.0);
+                        ui.add_space(((rect.width() - gutter - text_width - 8.0) / 2.0).max(0.0));
+                    }
                     let origin = ui.cursor().min;
                     // Reservado para pintar bajo el texto la sombra y la línea actual.
                     let under_text = ui.painter().add(egui::Shape::Noop);
@@ -378,7 +392,34 @@ impl App {
                                 color,
                             ));
                         }
-                        if output.response.has_focus() && (changed || follow_cursor) {
+                        #[cfg(test)]
+                        {
+                            doc.typewriter.line = cursor_rect.center().y;
+                            doc.typewriter.center = rect.center().y;
+                            doc.typewriter.width = rect.width();
+                        }
+                        if typewriter {
+                            if output.response.has_focus() {
+                                // Un clic no mueve el texto; la rueda tampoco, porque
+                                // no cambia ni el texto ni el cursor.
+                                let now = (doc.editor.revision, range.primary.index.0);
+                                let moved = doc.typewriter.seen.replace(now) != Some(now);
+                                let clicking = output.response.is_pointer_button_down_on();
+                                if (moved && !clicking) || changed || follow_cursor {
+                                    // Solo se centra en vertical; en horizontal, si el cursor
+                                    // ya se ve, se deja el desplazamiento como está.
+                                    let view = ui.clip_rect().x_range();
+                                    let target = if view.contains(cursor_rect.left())
+                                        && view.contains(cursor_rect.right())
+                                    {
+                                        egui::Rect::from_x_y_ranges(view, cursor_rect.y_range())
+                                    } else {
+                                        cursor_rect
+                                    };
+                                    ui.scroll_to_rect(target, Some(egui::Align::Center));
+                                }
+                            }
+                        } else if output.response.has_focus() && (changed || follow_cursor) {
                             ui.scroll_to_rect(cursor_rect, None);
                         }
                     } else if follow_cursor {
@@ -633,6 +674,7 @@ impl App {
                         });
                     }
                 });
+                ui.add_space(pad);
             });
         self.documents[index].layout = text_layout;
         self.documents[index].changes.1 = changes;

@@ -180,6 +180,18 @@ impl App {
                     }
                     changed |= ui.checkbox(&mut self.config.show_preview, "Vista previa").on_hover_text("Muestra el PDF de LaTeX o la vista previa de Markdown. F3.").changed();
                     changed |= ui.checkbox(&mut self.config.soft_wrap, "Ajustar líneas al ancho del editor").changed();
+                    if ui.checkbox(&mut self.config.typewriter, "Cursor centrado (máquina de escribir)").on_hover_text("Mantiene la línea del cursor en el centro del editor al escribir y al mover el cursor con el teclado. Si te desplazas con la rueda, no vuelve hasta que escribas o muevas el cursor.").changed() {
+                        self.sync_cursor = true;
+                        changed = true;
+                    }
+                    if ui.selectable_label(self.zen, "Modo sin distracciones").on_hover_text("Oculta los paneles, la vista previa, la barra de herramientas y las mascotas, y deja el texto en una columna centrada. Cmd/Ctrl+Mayús+E; Esc para salir.").clicked() {
+                        self.toggle_zen();
+                        ui.close();
+                    }
+                    if action(ui, "Fijar meta de palabras…", editable, "Elige cuántas palabras quieres escribir en esta sesión y muestra el progreso en la barra de estado. Requiere un documento editable.").clicked() {
+                        self.open_goal_dialog();
+                        ui.close();
+                    }
                     let mut split = self.split.is_some();
                     if ui.checkbox(&mut split, "Dividir el editor en dos paneles").on_hover_text("Muestra dos documentos uno junto al otro. Un clic en un panel lo activa y las pestañas cambian el documento del panel activo. Cmd/Ctrl+\\.").changed() {
                         self.toggle_split();
@@ -334,6 +346,7 @@ impl App {
                 if action(ui, "Ayuda", true, "Consulta las funciones y los atajos de teclado. F1.").clicked() { self.help = true; }
                 });
             });
+            if !self.zen {
             ui.separator();
             ui.horizontal_wrapped(|ui| {
                 self.sidebar_toggle(ui);
@@ -367,6 +380,7 @@ impl App {
                         .on_hover_text(root.display().to_string());
                 }
             });
+            }
         });
     }
 

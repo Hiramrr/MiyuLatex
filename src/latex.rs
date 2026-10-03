@@ -397,24 +397,28 @@ pub fn table(rows: usize, columns: usize, alignment: char) -> String {
 
 pub fn estimated_words(sources: &[Source]) -> usize {
     sources.iter().filter(|s| s.path.extension().is_some_and(|e| e != "bib"))
-        .map(|source| {
-            let text = source.text.split_once("\\begin{document}").map_or(source.text.as_str(), |(_, body)| body);
-            let mut state = highlight::State::default();
-            let clean = text.lines().map(|line| {
-                let (spans, next) = highlight::tokenize_line(line, &state);
-                state = next;
-                let mut chars: Vec<_> = line.chars().collect();
-                for span in spans {
-                    if matches!(span.tok, highlight::Tok::Comment | highlight::Tok::Verbatim | highlight::Tok::Math | highlight::Tok::MathDelim | highlight::Tok::MathCommand) {
-                        chars[span.start..span.end].fill(' ');
-                    }
-                }
-                chars.into_iter().collect::<String>()
-            }).collect::<Vec<_>>().join("\n");
-            let clean = regex(r"\\(?:begin|end|label|[cC]ite\w*|ref|eqref|pageref|autoref|input|include|subfile|includegraphics|addbibresource|bibliography|bibliographystyle)(?:\[[^\]]*\])*\s*\{[^}]*\}").replace_all(&clean, " ");
-            let clean = regex(r"\\[a-zA-Z@]+\*?(?:\[[^\]]*\])?").replace_all(&clean, " ");
-            clean.split(|c: char| !c.is_alphabetic() && c != '\'').filter(|word| word.chars().any(char::is_alphabetic)).count()
-        }).sum()
+        .map(|source| prose_words(&source.text)).sum()
+}
+
+/// Palabras de la prosa de un texto LaTeX: sin preámbulo, comentarios,
+/// código literal, fórmulas, comandos ni claves de referencias.
+pub fn prose_words(source: &str) -> usize {
+    let text = source.split_once("\\begin{document}").map_or(source, |(_, body)| body);
+    let mut state = highlight::State::default();
+    let clean = text.lines().map(|line| {
+        let (spans, next) = highlight::tokenize_line(line, &state);
+        state = next;
+        let mut chars: Vec<_> = line.chars().collect();
+        for span in spans {
+            if matches!(span.tok, highlight::Tok::Comment | highlight::Tok::Verbatim | highlight::Tok::Math | highlight::Tok::MathDelim | highlight::Tok::MathCommand) {
+                chars[span.start..span.end].fill(' ');
+            }
+        }
+        chars.into_iter().collect::<String>()
+    }).collect::<Vec<_>>().join("\n");
+    let clean = regex(r"\\(?:begin|end|label|[cC]ite\w*|ref|eqref|pageref|autoref|input|include|subfile|includegraphics|addbibresource|bibliography|bibliographystyle)(?:\[[^\]]*\])*\s*\{[^}]*\}").replace_all(&clean, " ");
+    let clean = regex(r"\\[a-zA-Z@]+\*?(?:\[[^\]]*\])?").replace_all(&clean, " ");
+    clean.split(|c: char| !c.is_alphabetic() && c != '\'').filter(|word| word.chars().any(char::is_alphabetic)).count()
 }
 
 pub fn history_directory(path: &Path) -> PathBuf {

@@ -57,6 +57,9 @@ pub(in crate::app) enum Command {
     TestCode,
     CheckCode,
     ToggleMascot,
+    ToggleTypewriter,
+    ToggleFocus,
+    WordGoal,
     Bold,
     Italic,
     Symbol,
@@ -303,6 +306,24 @@ impl App {
                 true,
                 Command::ToggleMascot,
             ),
+            (
+                "Cursor centrado (máquina de escribir)",
+                "",
+                editable,
+                Command::ToggleTypewriter,
+            ),
+            (
+                "Modo sin distracciones",
+                "Mod+Shift+E",
+                true,
+                Command::ToggleFocus,
+            ),
+            (
+                "Fijar meta de palabras…",
+                "",
+                editable,
+                Command::WordGoal,
+            ),
             ("Negrita", "Mod+B", prose, Command::Bold),
             ("Cursiva", "Mod+I", prose, Command::Italic),
             ("Insertar símbolo LaTeX…", "Mod+T", latex, Command::Symbol),
@@ -470,13 +491,20 @@ impl App {
             Command::NextProblem => self.next_problem(false),
             Command::PreviousProblem => self.next_problem(true),
             Command::ToggleSidebar => {
-                self.config.show_sidebar = !self.config.show_sidebar;
-                self.preferences_changed(ctx);
+                if !self.leave_zen() {
+                    self.config.show_sidebar = !self.config.show_sidebar;
+                    self.preferences_changed(ctx);
+                }
             }
-            Command::ShowGit => self.show_git(ctx),
+            Command::ShowGit => {
+                self.leave_zen();
+                self.show_git(ctx);
+            }
             Command::TogglePreview => {
-                self.config.show_preview = !self.config.show_preview;
-                self.preferences_changed(ctx);
+                if !self.leave_zen() {
+                    self.config.show_preview = !self.config.show_preview;
+                    self.preferences_changed(ctx);
+                }
             }
             Command::ToggleWrap => {
                 self.config.soft_wrap = !self.config.soft_wrap;
@@ -486,9 +514,20 @@ impl App {
             Command::Fold => self.toggle_fold_at_cursor(),
             Command::FoldAll => self.fold_everything(true),
             Command::UnfoldAll => self.fold_everything(false),
-            Command::ToggleProblems => self.toggle_problems(),
-            Command::ToggleTerminal => self.toggle_terminal(ctx),
-            Command::NewTerminal => self.new_terminal(ctx),
+            Command::ToggleProblems => {
+                if !self.leave_zen() {
+                    self.toggle_problems();
+                }
+            }
+            Command::ToggleTerminal => {
+                if !self.leave_zen() {
+                    self.toggle_terminal(ctx);
+                }
+            }
+            Command::NewTerminal => {
+                self.leave_zen();
+                self.new_terminal(ctx);
+            }
             Command::RunCode => self.run_task_kind(developer::TaskKind::Run, ctx),
             Command::TestCode => self.run_task_kind(developer::TaskKind::Test, ctx),
             Command::CheckCode => self.run_task_kind(developer::TaskKind::Check, ctx),
@@ -496,6 +535,9 @@ impl App {
                 self.config.mascot = !self.config.mascot;
                 self.preferences_changed(ctx);
             }
+            Command::ToggleTypewriter => self.toggle_typewriter(ctx),
+            Command::ToggleFocus => self.toggle_zen(),
+            Command::WordGoal => self.open_goal_dialog(),
             Command::Bold | Command::Italic => {
                 self.editor_mut().emphasize(command == Command::Bold);
                 self.changed_editor();
