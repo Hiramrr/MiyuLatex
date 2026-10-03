@@ -29,18 +29,19 @@ use std::{
     time::{Duration, Instant},
 };
 
-mod workspace;
-mod dialogs;
-mod editor_panel;
+mod appearance;
 mod build;
-mod project;
-use project::project_files;
+mod dialogs;
 mod documents;
-mod shortcuts;
+mod editor_panel;
 mod preview_panel;
+mod project;
+mod shortcuts;
 mod sidebar;
 mod toolbar;
-mod appearance;
+mod workspace;
+
+use project::project_files;
 
 /// Buscar el archivo principal lee disco: se recuerda mientras no cambie
 /// aquello del texto de lo que depende.
