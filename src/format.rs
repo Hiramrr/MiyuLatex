@@ -15,7 +15,11 @@ pub enum Format {
 
 pub fn syntax_settings() -> &'static SyntectSettings {
     static SETTINGS: OnceLock<SyntectSettings> = OnceLock::new();
-    SETTINGS.get_or_init(SyntectSettings::default)
+    // Las gramáticas de syntect más las de bat, que añaden lenguajes recientes.
+    SETTINGS.get_or_init(|| SyntectSettings {
+        ps: two_face::syntax::extra_newlines(),
+        ..Default::default()
+    })
 }
 
 impl Format {
@@ -136,4 +140,28 @@ pub fn markdown_outline(text: &str) -> Vec<(usize, usize, String)> {
         }
     }
     outline
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recent_languages_have_a_grammar() {
+        for (file, name) in [
+            ("main.ts", "TypeScript"),
+            ("App.tsx", "TypeScriptReact"),
+            ("Main.kt", "Kotlin"),
+            ("App.swift", "Swift"),
+            ("Cargo.toml", "TOML"),
+            ("main.rs", "Rust"),
+            ("main.py", "Python"),
+        ] {
+            assert_eq!(
+                Format::detect(Path::new(file)),
+                Format::Code(name.into()),
+                "{file}"
+            );
+        }
+    }
 }

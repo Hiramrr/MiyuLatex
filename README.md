@@ -87,9 +87,10 @@ y permite saltar a ellos. Los enlaces a otros archivos locales abren una
 pestaña. `Cmd+B` y `Cmd+I` insertan el formato de Markdown. Enter continúa las
 listas y deja una casilla nueva sin marcar.
 
-Los archivos de código usan las gramáticas de Syntect para resaltado. Incluye
-Rust, Python, JavaScript, C, C++, Java, Go, SQL, HTML, CSS, JSON y YAML, entre
-otros. `Cmd+/` usa los comentarios del lenguaje cuando tiene un marcador
+Los archivos de código usan las gramáticas de Syntect para resaltado, más
+las de [two-face](https://crates.io/crates/two-face). Incluye Rust, Python,
+JavaScript, TypeScript, C, C++, Java, Kotlin, Swift, Go, SQL, HTML, CSS, JSON,
+TOML y YAML, entre otros. `Cmd+/` usa los comentarios del lenguaje cuando tiene un marcador
 definido. JSON no admite comentarios. Los archivos UTF-8 sin una gramática
 conocida se editan como texto. Guardar como conserva la extensión y cambia el
 resaltado según el nuevo nombre. Se conservan los saltos de línea de Windows.
