@@ -421,6 +421,10 @@ impl App {
                             "Problemas copiados".into()
                         };
                     }
+                    if self.developer.selected {
+                        ui.separator();
+                        self.terminal_controls(ui);
+                    }
                 });
                 ui.separator();
                 if self.developer.selected {

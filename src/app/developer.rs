@@ -242,101 +242,24 @@ impl App {
         }
     }
 
-    pub(super) fn terminal_panel(&mut self, ui: &mut egui::Ui) {
+    /// Sesiones y tareas, en la misma fila que las pestañas del panel inferior.
+    pub(super) fn terminal_controls(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
-        ui.horizontal_wrapped(|ui| {
-            ui.menu_button("Sesión", |ui| {
-                if action(
-                    ui,
-                    "Nueva terminal",
-                    true,
-                    "Abre una shell en el proyecto. Ctrl+Mayús+`.",
-                )
-                .clicked()
-                {
-                    self.new_terminal(&ctx);
-                    ui.close();
-                }
-                let alive = self
-                    .developer
-                    .terminals
-                    .get(self.developer.active)
-                    .is_some_and(|t| t.exit.is_none());
-                if action(
-                    ui,
-                    "Interrumpir",
-                    alive,
-                    "Envía Ctrl+C al proceso de esta sesión.",
-                )
-                .clicked()
-                {
-                    self.developer.terminals[self.developer.active].interrupt();
-                    ui.close();
-                }
-                if action(
-                    ui,
-                    "Limpiar",
-                    !self.developer.terminals.is_empty(),
-                    "Limpia la pantalla y el historial de esta terminal.",
-                )
-                .clicked()
-                {
-                    self.developer.terminals[self.developer.active].clear();
-                    ui.close();
-                }
-            });
-            if self.developer.tasks.is_empty() {
-                ui.label(RichText::new("Sin tareas detectadas").color(col(self.theme.muted())));
-            } else {
-                let task = &self.developer.tasks[self.developer.task_index];
-                egui::ComboBox::from_id_salt("developer_tasks")
-                    .selected_text(&task.name)
-                    .width(180.0)
-                    .truncate()
-                    .show_ui(ui, |ui| {
-                        for (index, task) in self.developer.tasks.iter().enumerate() {
-                            ui.selectable_value(&mut self.developer.task_index, index, &task.name)
-                                .on_hover_text(task.description());
-                        }
-                    });
-                let task = &self.developer.tasks[self.developer.task_index];
-                if action(
-                    ui,
-                    "Ejecutar tarea",
-                    true,
-                    &format!("{}\n{}", task.description(), task.directory.display()),
-                )
-                .clicked()
-                {
-                    self.run_task(&ctx);
-                }
-            }
-        });
         let mut close = None;
-        ScrollArea::horizontal()
-            .id_salt("terminal_tabs")
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    for (index, terminal) in self.developer.terminals.iter().enumerate() {
-                        ui.push_id(terminal.id, |ui| {
-                            if ui
-                                .selectable_label(self.developer.active == index, &terminal.name)
-                                .on_hover_text(terminal.directory.display().to_string())
-                                .clicked()
-                            {
-                                self.developer.active = index;
-                                self.developer.focus = true;
-                                self.focus_editor = false;
-                            }
-                            if action(ui, "×", true, "Cierra esta sesión y detiene su proceso.")
-                                .clicked()
-                            {
-                                close = Some(index);
-                            }
-                        });
-                    }
-                });
-            });
+        for (index, terminal) in self.developer.terminals.iter().enumerate() {
+            if ui
+                .selectable_label(self.developer.active == index, &terminal.name)
+                .on_hover_text(terminal.directory.display().to_string())
+                .clicked()
+            {
+                self.developer.active = index;
+                self.developer.focus = true;
+                self.focus_editor = false;
+            }
+            if action(ui, "×", true, "Cierra esta sesión y detiene su proceso.").clicked() {
+                close = Some(index);
+            }
+        }
         if let Some(index) = close {
             self.developer.terminals.remove(index);
             self.developer.active = if index < self.developer.active {
@@ -348,6 +271,72 @@ impl App {
             };
             self.developer.focus = true;
         }
+        if action(
+            ui,
+            "Nueva terminal",
+            true,
+            "Abre una shell en el proyecto. Ctrl+Mayús+`.",
+        )
+        .clicked()
+        {
+            self.new_terminal(&ctx);
+        }
+        ui.menu_button("Sesión", |ui| {
+            let alive = self
+                .developer
+                .terminals
+                .get(self.developer.active)
+                .is_some_and(|t| t.exit.is_none());
+            if action(
+                ui,
+                "Interrumpir",
+                alive,
+                "Envía Ctrl+C al proceso de esta sesión.",
+            )
+            .clicked()
+            {
+                self.developer.terminals[self.developer.active].interrupt();
+                ui.close();
+            }
+            if action(
+                ui,
+                "Limpiar",
+                !self.developer.terminals.is_empty(),
+                "Limpia la pantalla y el historial de esta terminal.",
+            )
+            .clicked()
+            {
+                self.developer.terminals[self.developer.active].clear();
+                ui.close();
+            }
+        });
+        if !self.developer.tasks.is_empty() {
+            let task = &self.developer.tasks[self.developer.task_index];
+            egui::ComboBox::from_id_salt("developer_tasks")
+                .selected_text(&task.name)
+                .width(180.0)
+                .truncate()
+                .show_ui(ui, |ui| {
+                    for (index, task) in self.developer.tasks.iter().enumerate() {
+                        ui.selectable_value(&mut self.developer.task_index, index, &task.name)
+                            .on_hover_text(task.description());
+                    }
+                });
+            let task = &self.developer.tasks[self.developer.task_index];
+            if action(
+                ui,
+                "Ejecutar tarea",
+                true,
+                &format!("{}\n{}", task.description(), task.directory.display()),
+            )
+            .clicked()
+            {
+                self.run_task(&ctx);
+            }
+        }
+    }
+
+    pub(super) fn terminal_panel(&mut self, ui: &mut egui::Ui) {
         if let Some(error) = &self.developer.error {
             ui.colored_label(col(self.theme.error), error);
         }
@@ -356,18 +345,18 @@ impl App {
             return;
         }
         let terminal = &mut self.developer.terminals[self.developer.active];
-        ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new(terminal.directory.display().to_string()).size(12.0).color(col(self.theme.muted())))
-                .on_hover_text("Carpeta inicial de esta sesión. Cambiar de proyecto no mueve las terminales abiertas.");
-            if let Some(exit) = &terminal.exit {
-                let (text, color) = match exit {
-                    Ok(status) => (format!("Proceso terminado · código {}", status.exit_code()), if status.success() { self.theme.muted() } else { self.theme.error }),
-                    Err(e) => (e.clone(), self.theme.error),
-                };
-                ui.colored_label(col(color), text);
-            }
-            if let Some(error) = &terminal.error { ui.colored_label(col(self.theme.error), error); }
-        });
+        if terminal.exit.is_some() || terminal.error.is_some() {
+            ui.horizontal_wrapped(|ui| {
+                if let Some(exit) = &terminal.exit {
+                    let (text, color) = match exit {
+                        Ok(status) => (format!("Proceso terminado · código {}", status.exit_code()), if status.success() { self.theme.muted() } else { self.theme.error }),
+                        Err(e) => (e.clone(), self.theme.error),
+                    };
+                    ui.colored_label(col(color), text);
+                }
+                if let Some(error) = &terminal.error { ui.colored_label(col(self.theme.error), error); }
+            });
+        }
         let focus = std::mem::take(&mut self.developer.focus);
         terminal.show(
             ui,
