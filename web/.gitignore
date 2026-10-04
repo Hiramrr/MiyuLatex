@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+.reference/
+funciones/index.html
+capturas/index.html
+temas/index.html
+mascotas/index.html
+instalar/index.html

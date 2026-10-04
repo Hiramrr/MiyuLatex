@@ -4,6 +4,9 @@ Editor de LaTeX, Markdown y código escrito en Rust. Abre una ventana gráfica
 con egui, controles con la fuente del sistema, código monoespaciado y bordes finos. Incluye
 compilación LaTeX, vista previa de Markdown y un visor de PDF e imágenes.
 
+[Página del programa](https://hiramrr.github.io/MiyuLatex/), con funciones,
+temas y capturas reales. El código de la página está en [`web/`](web/).
+
 ![Ventana de MiyuLaTeX](docs/captura-rust.png)
 
 ## Ejecutar
