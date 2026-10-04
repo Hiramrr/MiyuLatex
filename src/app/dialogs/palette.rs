@@ -446,7 +446,7 @@ impl App {
     pub(in crate::app) fn run_command(&mut self, command: Command, ctx: &egui::Context) {
         self.focus_editor = true;
         match command {
-            Command::NewDocument => self.templates = true,
+            Command::NewDocument => self.new_file(""),
             Command::Open => self.open_dialog(),
             Command::OpenQuick => self.open_quick(),
             Command::Save => {
@@ -467,7 +467,7 @@ impl App {
             Command::MakePresentation => self.create_presentation(),
             Command::NewProject => self.new_project(),
             Command::OpenFolder => self.folder_dialog(),
-            Command::NewFile => self.new_file(),
+            Command::NewFile => self.new_file(""),
             Command::AddFiles => self.add_files(),
             Command::ImportZip => self.import_project(ctx),
             Command::ExportZip => self.export_project(ctx),

@@ -51,7 +51,7 @@ impl App {
         if Self::shortcut(ctx, cmd | Modifiers::SHIFT, Key::N) {
             self.new_project();
         } else if Self::shortcut(ctx, cmd, Key::N) {
-            self.templates = true;
+            self.new_file("");
         }
         if Self::shortcut(ctx, cmd, Key::O) {
             self.open_dialog();

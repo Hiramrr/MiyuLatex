@@ -28,8 +28,8 @@ impl App {
             }).ui(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                 ui.menu_button("Archivo", |ui| {
-                    if action(ui, "Nuevo documento…", true, "Abre un documento sin guardar. Cmd/Ctrl+N.").clicked() {
-                        self.templates = true;
+                    if action(ui, "Nuevo documento…", true, "Crea un archivo en el proyecto. Cmd/Ctrl+N.").clicked() {
+                        self.new_file("");
                         ui.close();
                     }
                     if action(ui, "Abrir archivo…", true, "Abre texto, código, un PDF o una imagen. Cmd/Ctrl+O.").clicked() {
@@ -103,7 +103,7 @@ impl App {
                     }
                     self.recent_menu(ui);
                     if action(ui, "Crear archivo en el proyecto…", true, "Crea y abre un archivo dentro de la carpeta del proyecto.").clicked() {
-                        self.new_file();
+                        self.new_file("");
                         ui.close();
                     }
                     if action(ui, "Añadir archivos al proyecto…", true, "Copia archivos existentes al proyecto sin sobrescribir archivos con el mismo nombre.").clicked() {
@@ -351,7 +351,7 @@ impl App {
             ui.horizontal_wrapped(|ui| {
                 self.sidebar_toggle(ui);
                 ui.separator();
-                if toolbar_action(ui, "Nuevo", "Nuevo documento…", true, "Crea un documento sin guardar. Cmd/Ctrl+N.").clicked() { self.templates = true; }
+                if toolbar_action(ui, "Nuevo", "Nuevo documento…", true, "Crea un archivo en el proyecto. Cmd/Ctrl+N.").clicked() { self.new_file(""); }
                 if toolbar_action(ui, "Abrir", "Abrir archivo…", true, "Abre un documento, código, PDF o imagen. Cmd/Ctrl+O.").clicked() { self.open_dialog(); }
                 if toolbar_action(ui, "Guardar", "Guardar", editable, "Guarda la pestaña activa. Cmd/Ctrl+S. PDF e imágenes son de solo lectura.").clicked() { self.save_document(self.active, false); }
                 if toolbar_action(ui, "Terminal", "Mostrar u ocultar terminal", true, "Abre la terminal integrada. Ctrl+`.").clicked() { self.toggle_terminal(&ctx); }

@@ -74,58 +74,106 @@ impl App {
     pub(super) fn templates_dialog(&mut self, ctx: &egui::Context) {
         if self.templates {
             let mut open = true;
-            let mut chosen = None;
-            let mut blank = None;
+            // Nombre por omisión y contenido del archivo elegido.
+            let mut chosen: Option<(&str, &str)> = None;
+            let mut name = std::mem::take(&mut self.workspace.name);
+            // Con la extensión ya escrita solo se ofrecen los formatos que la usan.
+            let extension = Path::new(name.trim())
+                .extension()
+                .map(|e| e.to_string_lossy().to_lowercase());
+            let typed = extension.is_some();
+            let fits = |default: &str| {
+                extension
+                    .as_deref()
+                    .is_none_or(|e| Path::new(default).extension().is_some_and(|d| d == e))
+            };
+            let blank: Vec<_> = [
+                ("LaTeX", "sin-titulo.tex"),
+                ("Bibliografía", "referencias.bib"),
+                ("Markdown", "sin-titulo.md"),
+                ("Texto", "sin-titulo.txt"),
+            ]
+            .iter()
+            .chain(workspace::CODE_FILES)
+            .filter(|(_, default)| fits(default))
+            .collect();
             egui::Window::new("Nuevo documento")
                 .open(&mut open)
+                .collapsible(false)
                 .resizable(false)
                 .vscroll(true)
                 .default_height(560.0)
                 .default_width(420.0)
                 .show(ctx, |ui| {
-                    if action(ui, "Cancelar", true, "Cierra sin crear un documento.").clicked() { ui.close_kind(egui::UiKind::Window); }
-                    ui.label("Documento vacío");
-                    ui.horizontal_wrapped(|ui| {
-                        for (label, name) in [
-                            ("LaTeX", "sin-titulo.tex"),
-                            ("Bibliografía", "referencias.bib"),
-                            ("Markdown", "sin-titulo.md"),
-                            ("Texto", "sin-titulo.txt"),
-                        ] {
-                            if action(ui, label, true, "Abre un documento vacío de este formato. Elige su ubicación al guardar.").clicked() { blank = Some(name); }
-                        }
-                        for (language, name) in workspace::CODE_FILES {
-                            if action(ui, language, true, "Abre un archivo de código vacío de este lenguaje.").clicked() { blank = Some(*name); }
-                        }
-                    });
-                    ui.separator();
-                    ui.label("Plantillas LaTeX");
-                    for (i, template) in catalog().templates.iter().enumerate() {
-                        if ui
-                            .button(format!("Crear {}", template.title))
-                            .on_hover_text(&template.description)
-                            .clicked()
-                        {
-                            chosen = Some(i);
-                        }
-                        ui.label(
-                            RichText::new(&template.description)
-                                .size(13.0)
-                                .color(col(self.theme.muted())),
-                        );
+                    let label = ui.label("Nombre");
+                    let response = ui
+                        .add(
+                            TextEdit::singleline(&mut name)
+                                .hint_text("nombre o carpeta/nombre")
+                                .desired_width(f32::INFINITY),
+                        )
+                        .labelled_by(label.id);
+                    if std::mem::take(&mut self.workspace.focus_name) {
+                        response.request_focus();
                     }
-                    ui.separator();
-
+                    if response.changed() {
+                        self.workspace.name_error.clear();
+                    }
+                    ui.label(
+                        RichText::new(format!(
+                            "Se guarda en {}. Elige un formato; sin nombre se usa el del formato.",
+                            self.project.display()
+                        ))
+                        .size(12.0)
+                        .color(col(self.theme.muted())),
+                    );
+                    if !self.workspace.name_error.is_empty() {
+                        ui.colored_label(col(self.theme.error), &self.workspace.name_error);
+                    }
+                    ui.horizontal_wrapped(|ui| {
+                        if action(ui, "Crear archivo", typed, "Crea el archivo con la extensión que escribiste. Enter.").clicked()
+                            || typed && response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter))
+                        {
+                            chosen = Some(("", ""));
+                        }
+                        if action(ui, "Cancelar", true, "Cierra sin crear un documento.").clicked() { ui.close_kind(egui::UiKind::Window); }
+                    });
+                    if !blank.is_empty() {
+                        ui.separator();
+                        ui.label("Documento vacío");
+                        ui.horizontal_wrapped(|ui| {
+                            for (label, default) in &blank {
+                                if action(ui, label, true, "Crea un archivo vacío de este formato en el proyecto.").clicked() { chosen = Some((default, "")); }
+                            }
+                        });
+                    }
+                    if fits("sin-titulo.tex") {
+                        ui.separator();
+                        ui.label("Plantillas LaTeX");
+                        for template in &catalog().templates {
+                            if ui
+                                .button(format!("Crear {}", template.title))
+                                .on_hover_text(&template.description)
+                                .clicked()
+                            {
+                                chosen = Some((&template.filename, &template.text));
+                            }
+                            ui.label(
+                                RichText::new(&template.description)
+                                    .size(13.0)
+                                    .color(col(self.theme.muted())),
+                            );
+                        }
+                    }
                 });
             self.templates = open;
-            if let Some(name) = blank {
-                self.add_document(Editor::untitled(String::new(), name));
-                self.templates = false;
+            if let Some((default, text)) = chosen {
+                match self.create_file(&name, default, text) {
+                    Ok(()) => self.templates = false,
+                    Err(e) => self.workspace.name_error = e,
+                }
             }
-            if let Some(i) = chosen {
-                self.new_document(i);
-                self.templates = false;
-            }
+            self.workspace.name = name;
         }
     }
     pub(super) fn symbols_dialog(&mut self, ctx: &egui::Context) {

@@ -271,7 +271,7 @@ impl App {
                     )
                     .clicked()
                     {
-                        self.new_file();
+                        self.new_file("");
                     }
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);

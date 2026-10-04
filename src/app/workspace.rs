@@ -68,9 +68,11 @@ pub struct State {
     quick_index: usize,
     quick_focus: bool,
     rename: Option<(PathBuf, String)>,
-    create: Option<String>,
+    /// Nombre escrito en «Nuevo documento» y el error de su último intento.
+    pub name: String,
+    pub name_error: String,
     project: Option<NewProject>,
-    focus_name: bool,
+    pub focus_name: bool,
     /// Carpetas plegadas en el árbol de archivos.
     collapsed: HashSet<PathBuf>,
     /// Filas del árbol y la huella de lo que las produjo.
@@ -266,7 +268,9 @@ impl App {
         if let Some((filename, _)) = initial {
             self.open(&self.project.join(filename))?;
         } else {
-            self.add_document(Editor::untitled(String::new(), "sin-titulo.txt"));
+            // Proyecto vacío: el usuario elige qué crear primero.
+            self.add_document(Editor::new(String::new(), None));
+            self.new_file("");
         }
         self.config.show_sidebar = true;
         self.outline = false;
@@ -650,8 +654,11 @@ impl App {
             }
         }
     }
-    pub(super) fn new_file(&mut self) {
-        self.workspace.create = Some(String::new());
+    /// Abre «Nuevo documento» con `folder` ya escrito en el nombre.
+    pub(super) fn new_file(&mut self, folder: &str) {
+        self.templates = true;
+        self.workspace.name = folder.into();
+        self.workspace.name_error.clear();
         self.workspace.focus_name = true;
     }
     /// Árbol de carpetas y archivos del proyecto en la barra lateral.
@@ -850,8 +857,7 @@ impl App {
         }
         if let Some(folder) = create {
             let inside = folder.strip_prefix(&self.project).unwrap_or(&folder);
-            self.workspace.create = Some(format!("{}/", inside.to_string_lossy()));
-            self.workspace.focus_name = true;
+            self.new_file(&format!("{}/", inside.to_string_lossy()));
         }
     }
     fn rename(&mut self, from: &Path, name: &str) -> Result<(), String> {
@@ -886,14 +892,43 @@ impl App {
         self.message = format!("Renombrado a {}", to.display());
         Ok(())
     }
-    fn create(&mut self, name: &str) -> Result<(), String> {
-        let relative = relative(name).ok_or("Escribe un nombre dentro del proyecto, sin «..»")?;
-        let relative = if relative.extension().is_none() {
-            relative.with_extension("txt")
+    /// Crea `name` en el proyecto con `text` y lo abre. La extensión es la de
+    /// `default`; sin nombre se usa `default`, numerado si ya existe.
+    pub(super) fn create_file(
+        &mut self,
+        name: &str,
+        default: &str,
+        text: &str,
+    ) -> Result<(), String> {
+        let name = name.trim();
+        let default = Path::new(default);
+        let extension = default.extension().unwrap_or_default();
+        let invalid = "Escribe un nombre dentro del proyecto, sin «..»";
+        let path = if name.is_empty() || name.ends_with('/') {
+            let folder = if name.is_empty() {
+                self.project.clone()
+            } else {
+                self.project.join(relative(name).ok_or(invalid)?)
+            };
+            let stem = default.file_stem().unwrap_or_default().to_string_lossy();
+            (1..)
+                .map(|n| {
+                    if n == 1 {
+                        folder.join(default)
+                    } else {
+                        folder.join(format!("{stem}-{n}.{}", extension.to_string_lossy()))
+                    }
+                })
+                .find(|p| !p.exists())
+                .unwrap()
         } else {
-            relative
+            let mut relative = relative(name).ok_or(invalid)?;
+            if !extension.is_empty() && relative.extension() != Some(extension) {
+                relative.as_mut_os_string().push(".");
+                relative.as_mut_os_string().push(extension);
+            }
+            self.project.join(relative)
         };
-        let path = self.project.join(relative);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
@@ -901,9 +936,26 @@ impl App {
             .write(true)
             .create_new(true)
             .open(&path)
-            .map_err(|e| format!("No pude crear {}: {e}", path.display()))?;
+            .and_then(|mut file| std::io::Write::write_all(&mut file, text.as_bytes()))
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    format!("Ya existe {}. Elige otro nombre.", path.display())
+                } else {
+                    format!("No pude crear {}: {e}", path.display())
+                }
+            })?;
         self.files = project_files(&self.project);
-        self.open(&path)
+        self.open(&path)?;
+        // La pestaña vacía de relleno ya no hace falta.
+        if let Some(i) = self
+            .documents
+            .iter()
+            .position(|d| d.editor.path.is_none() && d.editor.text().is_empty())
+        {
+            self.documents.remove(i);
+            self.active -= usize::from(i < self.active);
+        }
+        Ok(())
     }
     /// Archivos del proyecto que mejor coinciden con lo tecleado.
     fn quick_matches(&self) -> Vec<PathBuf> {
@@ -1023,39 +1075,6 @@ impl App {
                 }
             } else if open {
                 self.workspace.rename = Some((path, name));
-            }
-        }
-        if let Some(mut name) = self.workspace.create.take() {
-            let mut open = true;
-            let mut confirm = false;
-            egui::Window::new("Nuevo archivo del proyecto")
-                .open(&mut open)
-                .collapsible(false)
-                .resizable(false)
-                .show(ctx, |ui| {
-                    let response = ui.add(
-                        TextEdit::singleline(&mut name)
-                            .hint_text("carpeta/archivo.txt")
-                            .desired_width(320.0),
-                    );
-                    if std::mem::take(&mut self.workspace.focus_name) {
-                        response.request_focus();
-                    }
-                    confirm = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-                    ui.label(
-                        RichText::new("Se crea dentro del proyecto. Escribe la extensión del formato que quieras. Sin extensión se usa .txt.")
-                            .size(12.0),
-                    );
-                    confirm |= action(ui, "Crear archivo", relative(&name).is_some(), "Crea y abre el archivo. Escribe un nombre dentro del proyecto.").clicked();
-                    if action(ui, "Cancelar", true, "Cierra sin crear un archivo.").clicked() { ui.close_kind(egui::UiKind::Window); }
-                });
-            if confirm {
-                if let Err(e) = self.create(&name) {
-                    self.message = e;
-                    self.workspace.create = Some(name);
-                }
-            } else if open {
-                self.workspace.create = Some(name);
             }
         }
         if let Some((path, disk)) = self.workspace.conflict.take() {
@@ -1283,11 +1302,18 @@ mod tests {
         assert!(!app.editor().dirty());
 
         // Archivos nuevos, renombrados y duplicados dentro del proyecto.
-        assert!(app.create("../fuera.tex").is_err());
-        app.create("cap/dos").unwrap();
+        assert!(app.create_file("../fuera.tex", "", "").is_err());
+        app.create_file("cap/dos", "sin-titulo.txt", "").unwrap();
         let two = folder.join("cap/dos.txt");
         assert_eq!(app.editor().path.as_ref(), Some(&two));
-        assert!(app.create("cap/dos.txt").is_err());
+        assert!(app.create_file("cap/dos.txt", "", "").is_err());
+        // Sin nombre se usa el del formato, numerado si ya existe.
+        for name in ["main.py", "main-2.py"] {
+            app.create_file("cap/", "main.py", "x = 1\n").unwrap();
+            assert_eq!(app.editor().path.as_ref(), Some(&folder.join("cap").join(name)));
+            assert_eq!(app.editor().text(), "x = 1\n");
+        }
+        app.open(&two).unwrap();
         assert!(app.rename(&two, "uno.tex").is_err());
         assert!(app.rename(&two, "otra/tres.tex").is_err());
         app.rename(&two, "tres.tex").unwrap();
@@ -1350,7 +1376,33 @@ mod tests {
         assert_eq!(app.project, folder.join("Vacío ñ"));
         assert_eq!(fs::read_dir(&app.project).unwrap().count(), 0);
         assert!(app.files.is_empty());
-        assert_eq!(app.editor().format, crate::format::Format::Text);
+        // El proyecto vacío pregunta qué crear; al elegir, la pestaña de relleno se va.
+        assert!(app.templates && app.editor().path.is_none());
+        let documents = app.documents.len();
+        app.create_file("", "main.py", "").unwrap();
+        assert_eq!(app.documents.len(), documents);
+        assert_eq!(app.editor().path, Some(app.project.join("main.py")));
+        // Cmd+N pide el nombre y Enter crea el archivo sin el diálogo del sistema.
+        input(&mut app, &ctx, vec![key(Key::N, Modifiers::COMMAND)]);
+        assert!(app.templates);
+        input(&mut app, &ctx, vec![egui::Event::Text("notas.md".into())]);
+        // Con «.md» escrito ya no se ofrecen Python ni las plantillas LaTeX.
+        ctx.enable_accesskit();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 820.0));
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(screen),
+                ..Default::default()
+            },
+            |ui| app.draw(ui),
+        );
+        output.textures_delta.clear();
+        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+        let has = |label: &str| nodes.iter().any(|(_, n)| n.label() == Some(label));
+        assert!(has("Markdown") && !has("Python") && !has("Plantillas LaTeX"));
+        input(&mut app, &ctx, vec![key(Key::Enter, Modifiers::NONE)]);
+        assert!(!app.templates, "{}", app.workspace.name_error);
+        assert_eq!(app.editor().path, Some(app.project.join("notas.md")));
         assert_eq!(app.documents[preserved].editor.text(), text);
         assert!(app.documents[preserved].editor.dirty());
         assert_eq!(app.config.recent_projects[0], app.project.to_string_lossy());
